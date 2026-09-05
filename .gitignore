@@ -43,4 +43,5 @@ __pycache__/
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?*.tsbuildinfo
+*.sw?
+*.tsbuildinfo
