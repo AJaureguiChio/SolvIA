@@ -45,3 +45,4 @@ __pycache__/
 *.sln
 *.sw?
 *.tsbuildinfo
+.neon
