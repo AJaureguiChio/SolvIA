@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SolvIA · Wireframes funcionales</title>
+  <style>
+    :root { color-scheme: light; --ink:#27313a; --muted:#63717b; --line:#bcc6ce; --light:#e9edf0; --paper:#fff; --canvas:#f1f3f4; --accent:#39556a; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,-apple-system,Segoe UI,sans-serif; color:var(--ink); background:var(--canvas); }
+    button, select, input, textarea { font:inherit; }
+    button { cursor:pointer; }
+    .toolbar { position:sticky; top:0; z-index:4; display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:10px 20px; background:#263846; color:white; box-shadow:0 3px 12px #1a2b3533; }
+    .toolbar strong { font-size:16px; margin-right:auto; letter-spacing:.01em; }
+    .toolbar label { font-size:12px; display:flex; align-items:center; gap:7px; }
+    .toolbar select, .toolbar button { border:1px solid #a7b7c2; border-radius:5px; background:white; color:#243443; padding:7px 10px; }
+    .toolbar .hint { font-size:11px; color:#d0dce4; }
+    .layout { max-width:1540px; margin:0 auto; display:grid; grid-template-columns:254px minmax(0,1fr); min-height:calc(100vh - 58px); }
+    .rail { background:#e5e9ec; border-right:1px solid var(--line); padding:20px 11px; }
+    .rail h2 { font-size:11px; color:#556671; text-transform:uppercase; letter-spacing:.09em; margin:17px 10px 7px; }
+    .navitem { width:100%; text-align:left; border:1px solid transparent; border-radius:5px; padding:8px 10px; background:transparent; color:#27313a; font-size:12px; line-height:1.35; }
+    .navitem:hover { background:#f8f9fa; }
+    .navitem[aria-current="page"] { background:#fff; border-color:#9caebc; font-weight:700; box-shadow:0 1px 2px #0001; }
+    .navitem .num { display:inline-block; min-width:25px; font-size:11px; color:#617481; }
+    .workspace { min-width:0; padding:22px clamp(12px,3vw,40px) 42px; }
+    .intro { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; margin-bottom:16px; }
+    .intro h1 { margin:0 0 3px; font-size:19px; }
+    .intro p { margin:0; font-size:12px; color:#596a75; max-width:780px; }
+    .badge { display:inline-block; border:1px solid #aebcc6; background:#f7f9fa; border-radius:4px; padding:3px 7px; color:#50616d; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+    .frame { background:var(--paper); border:1px solid #9eabb4; border-radius:8px; overflow:hidden; min-height:670px; box-shadow:0 14px 35px #3649581a; }
+    .apphead { height:55px; padding:0 20px; display:flex; align-items:center; gap:14px; border-bottom:2px solid #aab8c2; background:#f7f8f9; }
+    .apphead .logo { font-size:18px; font-weight:800; border:2px solid #3f515f; padding:4px 9px; letter-spacing:.02em; }
+    .apphead .appnav { margin-left:12px; color:#4c5d68; font-size:12px; }
+    .apphead .right { margin-left:auto; font-size:11px; display:flex; align-items:center; gap:9px; }
+    .avatar { border:1px solid #718493; width:27px; height:27px; display:inline-grid; place-items:center; border-radius:100%; font-size:12px; }
+    .page { padding:22px clamp(15px,3vw,38px) 35px; max-width:1200px; margin:auto; }
+    .page-title { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:20px; }
+    .page-title h2 { font-size:23px; margin:0 0 4px; }
+    .page-title p { margin:0; color:#64737b; font-size:12px; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .between { justify-content:space-between; }
+    .grid { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:13px; }
+    .col3 { grid-column:span 3; } .col4 { grid-column:span 4; } .col5 { grid-column:span 5; } .col6 { grid-column:span 6; } .col7 { grid-column:span 7; } .col8 { grid-column:span 8; } .col12 { grid-column:span 12; }
+    .card { border:1px solid var(--line); background:#fff; border-radius:5px; padding:15px; min-width:0; }
+    .card h3 { margin:0 0 12px; font-size:13px; }
+    .card p { font-size:12px; line-height:1.55; }
+    .stat { min-height:99px; }
+    .stat small { color:#5b6974; display:block; font-size:11px; }
+    .stat strong { font-size:29px; display:block; margin-top:8px; letter-spacing:-.04em; }
+    .stat em { font-style:normal; font-size:10px; color:#6f7e86; }
+    .btn { display:inline-block; border:1px solid #647887; background:#f5f7f8; color:#293b47; border-radius:4px; padding:9px 12px; font-size:11px; font-weight:650; text-decoration:none; }
+    .btn.primary { color:#fff; background:#435b6c; border-color:#435b6c; }
+    .btn.subtle { background:#fff; }
+    .btn:disabled { cursor:not-allowed; opacity:.45; }
+    .input, input.input, select.input, textarea.input { border:1px solid #9daeb8; border-radius:4px; background:#fff; min-height:36px; padding:7px 9px; width:100%; color:#31424e; font-size:12px; }
+    label.field { display:block; font-size:11px; font-weight:650; color:#354753; margin:0 0 11px; }
+    label.field .input { margin-top:5px; font-weight:400; }
+    .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px 14px; }
+    .form-grid .wide { grid-column:1/-1; }
+    .filters { display:grid; grid-template-columns:repeat(3,1fr) auto; gap:10px; margin-bottom:14px; align-items:end; }
+    .filters label.field { margin:0; }
+    .tablewrap { overflow:auto; border:1px solid var(--line); border-radius:5px; }
+    table { width:100%; border-collapse:collapse; font-size:11px; min-width:500px; }
+    th { text-align:left; background:#e8edf0; color:#3d4d58; font-weight:700; padding:10px; white-space:nowrap; }
+    td { border-top:1px solid #d7dfe3; padding:11px 10px; vertical-align:middle; }
+    tbody tr:nth-child(even) { background:#f9fafb; }
+    .link { background:none; border:0; color:#334f62; padding:0; font-weight:700; text-decoration:underline; text-underline-offset:2px; }
+    .pill { border:1px solid #a7b8c1; display:inline-block; border-radius:12px; font-size:10px; padding:3px 7px; color:#435661; background:#f3f6f7; }
+    .placeholder { background:repeating-linear-gradient(135deg,#e4e9ec,#e4e9ec 8px,#eff2f4 8px,#eff2f4 16px); border:1px dashed #9aabb5; border-radius:4px; min-height:160px; display:grid; place-items:center; text-align:center; padding:15px; color:#5d6d77; font-size:11px; }
+    .chart { min-height:205px; }
+    .small-chart { min-height:120px; }
+    .note { background:#f1f4f6; border-left:3px solid #7d909d; padding:10px 12px; font-size:11px; line-height:1.5; color:#485c68; margin:14px 0; }
+    .muted { color:#63737b; font-size:11px; }
+    .section { margin:24px 0 11px; font-size:15px; }
+    .tabs { display:flex; gap:16px; border-bottom:1px solid var(--line); margin:18px 0; padding-bottom:9px; overflow:auto; font-size:11px; }
+    .tabs span { white-space:nowrap; color:#5e707b; }
+    .tabs .active { font-weight:800; color:#243c4a; border-bottom:2px solid #475f70; padding-bottom:9px; margin-bottom:-10px; }
+    .steps { display:flex; flex-wrap:wrap; gap:8px; font-size:11px; margin-bottom:18px; }
+    .steps span { border:1px solid var(--line); background:#f5f7f8; padding:7px 9px; border-radius:3px; }
+    .steps span.active { border-color:#6d8492; background:#dde6eb; font-weight:700; }
+    .spacer { height:13px; }
+    .camera { min-height:240px; display:grid; place-items:center; text-align:center; border:2px dashed #9caab3; background:#e5e9ec; position:relative; color:#566873; font-size:12px; }
+    .face { width:100px; height:125px; border:3px dashed #899ba7; border-radius:48%; margin:12px auto; }
+    .centerbox { max-width:490px; margin:44px auto; }
+    .auth-shell { min-height:610px; background:#eef1f3; display:grid; place-items:center; padding:20px; }
+    .auth-panel { width:min(100%,420px); background:#fff; border:1px solid var(--line); border-radius:6px; padding:25px; box-shadow:0 6px 18px #33404a15; }
+    .auth-panel h2 { font-size:21px; margin:16px 0 6px; }
+    .auth-panel p { font-size:12px; line-height:1.5; color:#5a6d78; }
+    .auth-panel .btn { width:100%; margin-top:8px; text-align:center; }
+    .checkline { display:flex; align-items:flex-start; gap:8px; font-size:11px; line-height:1.4; padding:9px 0; }
+    .checkline input { margin-top:1px; }
+    .notice { border:1px solid #b8c8d0; border-radius:4px; background:#f5f8f9; padding:12px; font-size:11px; line-height:1.5; margin:0 0 15px; }
+    .notice.error { border-color:#b49c9c; background:#faf5f5; color:#6b4141; }
+    .empty { min-height:270px; border:1px dashed #a9b9c1; border-radius:5px; display:grid; place-items:center; text-align:center; padding:20px; }
+    .empty h3 { margin:0 0 5px; font-size:16px; }
+    .empty p { margin:0 0 12px; font-size:12px; color:#667780; }
+    .skeleton { height:14px; background:linear-gradient(90deg,#e4e9ec,#f3f5f6,#e4e9ec); margin:16px 0; border-radius:4px; }
+    .screen-footer { padding:12px 20px; border-top:1px solid #d7dfe4; background:#f8f9fa; color:#60717b; font-size:10px; }
+    .printroot { display:none; }
+    @media(max-width:1050px) { .layout { grid-template-columns:205px 1fr; } .col3 { grid-column:span 6; } .col4,.col5,.col6,.col7,.col8 { grid-column:span 6; } }
+    @media(max-width:740px) { .layout { display:block; } .rail { display:flex; overflow:auto; padding:8px; gap:3px; border-right:0; border-bottom:1px solid var(--line); } .rail h2 { display:none; } .navitem { min-width:140px; width:auto; } .workspace { padding:15px 9px 30px; } .col3,.col4,.col5,.col6,.col7,.col8 { grid-column:span 12; } .filters { grid-template-columns:1fr 1fr; } .toolbar strong { width:100%; } .form-grid { grid-template-columns:1fr; } .apphead .appnav { display:none; } }
+    @media print { @page { size:A4 landscape; margin:10mm; } body { background:#fff; } .toolbar,.layout { display:none; } .printroot { display:block; } .printpage { break-after:page; } .printpage .frame { box-shadow:none; min-height:0; } .print-title { font-size:15px; margin:0 0 8px; } .page { padding:15px 20px; } .chart { min-height:130px; } .apphead { height:42px; } .screen-footer { display:none; } }
+  </style>
+</head>
+<body>
+  <header class="toolbar">
+    <strong>SolvIA · Wireframes funcionales</strong>
+    <label>Perfil <select id="role" aria-label="Perfil a visualizar"><option value="administrador">Administrador</option><option value="gestor">Gestor</option></select></label>
+    <label>Estado <select id="state" aria-label="Estado de la pantalla"><option value="normal">Con datos</option><option value="empty">Vacío</option><option value="loading">Cargando</option><option value="error">Error</option></select></label>
+    <button id="print" type="button">Imprimir las 15 vistas</button>
+    <span class="hint">Prototipo sin datos reales ni conexión a Neon</span>
+  </header>
+  <div class="layout">
+    <nav class="rail" id="nav" aria-label="Pantallas"></nav>
+    <main class="workspace">
+      <div class="intro"><div><h1 id="screen-name"></h1><p id="screen-desc"></p></div><span class="badge" id="screen-role"></span></div>
+      <section class="frame" id="frame" aria-label="Wireframe de la pantalla seleccionada"></section>
+    </main>
+  </div>
+  <div id="printroot" class="printroot"></div>
+  <script>
+    const screens = [
+      {id:'login', group:'Acceso y perfil', name:'Inicio de sesión', access:'ambos', description:'Neon Auth gestiona el inicio de sesión. Este botón solo muestra el recorrido previsto.'},
+      {id:'face', group:'Acceso y perfil', name:'Verificación facial', access:'ambos', description:'Segundo paso opcional para quien activó la verificación facial.'},
+      {id:'face-settings', group:'Acceso y perfil', name:'Configuración facial', access:'ambos', description:'Registro y revocación de la plantilla propia; el modelo de Python sigue pendiente.'},
+      {id:'admin-home', group:'Paneles', name:'Panel del administrador', access:'administrador', description:'Vista agregada de la cartera y accesos a tareas administrativas.'},
+      {id:'manager-home', group:'Paneles', name:'Panel del gestor', access:'gestor', description:'Vista limitada a las cuentas que tiene asignadas.'},
+      {id:'debtors', group:'Deudores y cuentas', name:'Lista de deudores', access:'ambos', description:'Búsqueda y filtro; el gestor solo consulta deudores de sus cuentas.'},
+      {id:'debtor', group:'Deudores y cuentas', name:'Registro y detalle de deudor', access:'ambos', description:'Identificación con CURP o RFC y score ficticio capturado manualmente.'},
+      {id:'accounts', group:'Deudores y cuentas', name:'Lista de cuentas', access:'ambos', description:'El administrador consulta toda la cartera; el gestor solo sus asignaciones.'},
+      {id:'new-account', group:'Deudores y cuentas', name:'Registro de cuenta y plan', access:'administrador', description:'Cuenta, plan y cuotas se confirman como una sola operación.'},
+      {id:'account', group:'Deudores y cuentas', name:'Detalle de cuenta', access:'ambos', description:'Resumen, plan, pagos, movimientos e historial de asignaciones.'},
+      {id:'payment', group:'Seguimiento', name:'Registro de pago', access:'gestor', description:'El gestor asignado elige cuenta y monto; la base valida saldo y fecha.'},
+      {id:'movement', group:'Seguimiento', name:'Movimiento de saldo', access:'administrador', description:'Ajustes, reembolsos y reversiones con motivo y vínculo al pago cuando corresponda.'},
+      {id:'users', group:'Administración y reportes', name:'Gestión de usuarios', access:'administrador', description:'Roles, estado activo y reasignación previa a desactivar gestores.'},
+      {id:'reports', group:'Administración y reportes', name:'Lista de reportes', access:'ambos', description:'Consulta y descarga del PDF según el rol y los destinatarios.'},
+      {id:'new-report', group:'Administración y reportes', name:'Generación y entrega', access:'administrador', description:'Configuración, vista previa, PDF y registro de entrega a gestores.'}
+    ];
+    const $ = id => document.getElementById(id);
+    const state = { role:'administrador', status:'normal', page:'login' };
+    const b = (label,to,primary=false) => `<button type="button" class="btn ${primary?'primary':'subtle'}" data-go="${to}">${label}</button>`;
+    const field = (label,value='',kind='text') => `<label class="field">${label}<input class="input" type="${kind}" value="${value}" aria-label="${label}"></label>`;
+    const select = (label,values) => `<label class="field">${label}<select class="input" aria-label="${label}">${values.map(x=>`<option>${x}</option>`).join('')}</select></label>`;
+    const pill = text => `<span class="pill">${text}</span>`;
+    const table = (head,rows) => `<div class="tablewrap"><table><thead><tr>${head.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(row=>`<tr>${row.map(x=>`<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    const chart = (title,small=false) => `<div class="placeholder ${small?'small-chart':'chart'}">Área de gráfica<br>${title}<br><small>Datos de ejemplo · contenido por definir</small></div>`;
+    const title = (t,sub='',action='') => `<div class="page-title"><div><h2>${t}</h2><p>${sub}</p></div>${action}</div>`;
+    const notice = t => `<div class="note">${t}</div>`;
+    const tabs = labels => `<div class="tabs">${labels.map((x,i)=>`<span class="${i===0?'active':''}">${x}</span>`).join('')}</div>`;
+    const shell = (body,role=state.role) => `<div class="apphead"><div class="logo">SolvIA</div><div class="appnav">Panel &nbsp; / &nbsp; Deudores &nbsp; / &nbsp; Cuentas &nbsp; / &nbsp; Reportes</div><div class="right">${role==='administrador'?'Administrador':'Gestor'} <span class="avatar">U</span></div></div><div class="page">${body}</div><div class="screen-footer">Wireframe · contenido ficticio · las acciones muestran recorridos, no guardan información</div>`;
+    const stat = (name,val,small='') => `<div class="card stat"><small>${name}</small><strong>${val}</strong><em>${small}</em></div>`;
+    const views = {
+      login: () => `<div class="auth-shell"><div class="auth-panel"><div class="logo" style="display:inline-block">SolvIA</div><h2>Iniciar sesión</h2><p>Acceso para administradores y gestores autorizados.</p>${field('Correo electrónico','usuario@ejemplo.edu','email')}${field('Contraseña','••••••••','password')}<label class="checkline"><input id="demo-face" type="checkbox" checked> Vista de demostración: esta cuenta activó la verificación facial</label><button class="btn primary" data-login="true">Iniciar sesión</button><p style="text-align:center"><button class="link" data-demo="recovery">¿Olvidaste tu contraseña?</button></p><div class="notice">Si habilitaste la verificación facial, se solicitará después de iniciar sesión.</div></div></div>`,
+      face: () => `<div class="auth-shell"><div class="auth-panel" style="width:min(100%,540px)"><span class="badge">Paso adicional opcional</span><h2>Verifica tu rostro</h2><p>Permite el uso de la cámara y sitúa tu rostro dentro de la guía.</p><div class="camera"><div><div class="face"></div>Vista previa de cámara · ejemplo visual</div></div><button class="btn primary" data-go="${state.role==='administrador'?'admin-home':'manager-home'}">Simular verificación satisfactoria</button><button class="btn" data-go="login">Volver al acceso</button><p class="muted">Si la cámara falla, usa el proceso de recuperación de acceso. Pendiente definir política de intentos y nueva inscripción.</p></div></div>`,
+      'face-settings': () => shell(`${title('Mi verificación facial','Opción personal de seguridad; requiere sesión activa.')}`+`<div class="grid"><div class="card col7"><h3>Registrar rostro</h3><p>Antes de activar la verificación, permite acceder a la cámara y comprueba la captura.</p><div class="camera"><div><div class="face"></div>Vista previa de cámara · simulación</div></div><div class="spacer"></div>${b('Simular registro de rostro','face-settings',true)}</div><div class="card col5"><h3>Estado</h3>${pill('No configurado')}<p>Cuando se active, la verificación facial se solicitará después de iniciar sesión.</p><div class="notice">No se conservará una fotografía como credencial. Podrás desactivar esta opción.</div><button class="btn" data-demo="revoke">Desactivar verificación facial</button></div></div>`),
+      'admin-home': () => shell(`${title('Panel del administrador','Indicadores de todas las cuentas.',b('Generar reporte','new-report',true))}<div class="grid"><div class="col3">${stat('Cuentas activas','128','Todas las asignaciones')}</div><div class="col3">${stat('Al corriente','74 %','Según el plan')}</div><div class="col3">${stat('Atrasadas','21','Cuotas vencidas')}</div><div class="col3">${stat('Por asignar','8','Requieren un gestor')}</div><div class="card col7"><h3>Tendencia de pagos</h3>${chart('Importe registrado por periodo')}</div><div class="card col5"><h3>Estado de la cartera</h3>${chart('Distribución de cumplimiento')}</div><div class="card col12"><div class="row between"><h3>Prioridades</h3>${b('Ver cuentas','accounts')}</div>${table(['Cuenta','Deudor','Situación','Responsable','Acción'],[['CTA-104','Deudor 104',pill('Atrasado'),'Gestor A',b('Abrir','account')],['CTA-108','Deudor 108',pill('Sin asignar'),'—',b('Asignar','account')]])}</div></div>`,'administrador'),
+      'manager-home': () => shell(`${title('Mi panel','Solo cuentas asignadas al gestor.',b('Ver mis cuentas','accounts',true))}<div class="grid"><div class="col4">${stat('Cuentas asignadas','16')}</div><div class="col4">${stat('Al corriente','12')}</div><div class="col4">${stat('Atrasadas','4')}</div><div class="card col7"><h3>Pagos de mis cuentas</h3>${chart('Importes por semana')}</div><div class="card col5"><h3>Próximos vencimientos</h3>${table(['Cuenta','Fecha','Importe'],[['CTA-104','15 oct','MXN 500.00'],['CTA-117','18 oct','MXN 725.00']])}</div><div class="card col12"><div class="row between"><h3>Cuentas que necesitan atención</h3>${b('Registrar pago','payment')}</div>${table(['Cuenta','Deudor','Vencimiento','Situación','Acción'],[['CTA-104','Deudor 104','15 oct',pill('Atrasado'),b('Abrir','account')]])}</div></div>`,'gestor'),
+      debtors: () => shell(`${title('Deudores',state.role==='gestor'?'Solo personas vinculadas a mis cuentas.':'Personas registradas y su score ficticio.',state.role==='administrador'?b('Registrar deudor','debtor',true):'')}<div class="filters">${field('Nombre, CURP o RFC','Buscar...')}${select('Segmento',['Todos','Segmento A','Segmento B'])}${select('Ciudad',['Todas','Monterrey','Guadalupe'])}<button class="btn">Filtrar</button></div>${table(['Deudor','Identificador','Ciudad','Score','Cuentas','Acción'],[['Deudor 104','CURP ••••104','Monterrey','680','2',b('Ver ficha','debtor')],['Deudor 117','RFC ••••117','Guadalupe','735','1',b('Ver ficha','debtor')]])}${notice('CURP y RFC son identificadores únicos de los deudores ficticios. No se consulta un buró externo.')}`),
+      debtor: () => shell(`${title(state.role==='administrador'?'Registrar o consultar deudor':'Detalle del deudor','El score del buró se captura manualmente.',b('Volver a deudores','debtors'))}<div class="grid"><div class="card col7"><h3>Datos del deudor</h3><div class="form-grid">${field('Nombre','Deudor de demostración')}${field('Teléfono','000 000 0000')}${field('CURP','XXXX000000XXXXXX00')}${field('RFC','')}${field('Ciudad','Monterrey')}${select('Segmento',['Segmento A','Segmento B'])}${field('Score ficticio (0 a 1000)','680','number')}</div>${state.role==='administrador'?`<button class="btn primary" data-demo="save">Guardar deudor</button>`:''}</div><div class="card col5"><h3>Cuentas vinculadas</h3>${table(['Cuenta','Situación','Acción'],[['CTA-104',pill('Atrasado'),b('Abrir','account')]])}<div class="spacer"></div>${state.role==='administrador'?b('Crear cuenta y plan','new-account'):''}</div></div>${notice('Debe existir CURP o RFC. La validación en la base comprueba unicidad y formato básico, no identidad oficial.')}`),
+      accounts: () => shell(`${title(state.role==='administrador'?'Cartera de cuentas':'Mis cuentas',state.role==='administrador'?'Todas las cuentas, con o sin responsable.':'Únicamente las cuentas que tengo asignadas.',state.role==='administrador'?b('Crear cuenta y plan','new-account',true):'')}<div class="filters">${field('Cuenta o deudor','Buscar...')}${select('Cumplimiento',['Todos','Al corriente','Atrasado','Cubierto'])}${select('Gestor',['Todos','Gestor A','Sin asignar'])}<button class="btn">Filtrar</button></div>${table(['Cuenta','Deudor','Saldo','Plan','Gestor','Acción'],[['CTA-104','Deudor 104','MXN 3,900.00',pill('Atrasado'),'Gestor A',b('Abrir','account')],['CTA-117','Deudor 117','MXN 1,150.00',pill('Al corriente'),state.role==='administrador'?'Gestor B':'Yo',b('Abrir','account')]])}${notice('Saldo y cumplimiento son calculados. No existe un formulario para editarlos directamente.')}`),
+      'new-account': () => shell(`${title('Nueva cuenta y plan','El plan se pacta una vez; revisa todos los importes antes de confirmar.',b('Cancelar','accounts'))}<div class="steps"><span class="active">1. Cuenta</span><span class="active">2. Cuotas</span><span>3. Revisar y confirmar</span></div><div class="grid"><div class="card col5"><h3>Datos de la cuenta</h3>${select('Deudor',['Deudor 104','Buscar otro deudor'])}${field('Referencia externa','CTA-128')}${field('Producto','Crédito ficticio')}${field('Monto inicial (MXN)','1500.00','number')}${field('Fecha de originación','2026-09-01','date')}${select('Gestor responsable',['Sin asignar','Gestor A','Gestor B'])}</div><div class="card col7"><h3>Acuerdo y cuotas</h3>${field('Fecha del acuerdo','2026-09-24','date')}${table(['N.º','Vencimiento','Monto','Acción'],[['1','24 oct 2026','MXN 500.00','Quitar'],['2','24 nov 2026','MXN 500.00','Quitar'],['3','24 dic 2026','MXN 500.00','Quitar']])}<div class="spacer"></div><button class="btn" data-demo="row">+ Añadir cuota</button><p class="muted">Suma de cuotas: MXN 1,500.00 · Monto inicial: MXN 1,500.00</p></div><div class="card col12"><div class="row between"><div><strong>Revisión antes de guardar</strong><p class="muted">No se podrán renegociar el plan ni las cuotas después de confirmar.</p></div><button class="btn primary" data-demo="save">Confirmar cuenta, plan y cuotas</button></div></div></div>`,'administrador'),
+      account: () => shell(`${title('Cuenta CTA-104','Deudor 104 · Crédito ficticio · MXN',state.role==='gestor'?b('Registrar pago','payment',true):b('Reasignar gestor','users',true))}<div class="grid"><div class="col3">${stat('Saldo pendiente','3,900','MXN')}</div><div class="col3">${stat('Plan','Atrasado')}</div><div class="col3">${stat('Cuenta liquidada','No')}</div><div class="col3">${stat('Responsable','Gestor A')}</div></div>${tabs(['Plan y cuotas','Pagos','Movimientos','Asignaciones'])}<div class="grid"><div class="card col7"><h3>Plan de pago fijo</h3><p class="muted">Acuerdo: 01 sep 2026 · Monto original: MXN 5,000.00</p>${table(['Cuota','Vencimiento','Importe','Estado calculado'],[['1','15 sep 2026','MXN 1,500.00',pill('Parcial vencida')],['2','15 oct 2026','MXN 1,500.00',pill('Próxima')],['3','15 nov 2026','MXN 2,000.00',pill('Pendiente')]])}</div><div class="card col5"><h3>Resumen y acciones</h3><p>Pagos registrados: <strong>MXN 1,100.00</strong></p><p>Movimientos de saldo: <strong>MXN 0.00</strong></p><p>Responsable actual: <strong>Gestor A</strong></p>${state.role==='gestor'?b('Nuevo pago','payment'):b('Nuevo movimiento','movement')}${notice('El plan y los pagos históricos son inmutables. Las correcciones se registran aparte.')}</div><div class="card col6"><h3>Pagos recientes</h3>${table(['Fecha','Importe','Gestor'],[['23 sep 2026','MXN 1,100.00','Gestor A']])}</div><div class="card col6"><h3>Historial de asignación</h3>${table(['Fecha','Anterior','Nuevo','Autor'],[['10 sep 2026','—','Gestor A','Admin A']])}</div></div>`),
+      payment: () => shell(`${title('Registrar pago','Solo el gestor activo asignado puede registrar el pago.',b('Cancelar','account'))}<div class="grid"><div class="card col7"><h3>Datos del pago</h3>${select('Cuenta asignada',['CTA-104 · Deudor 104','CTA-117 · Deudor 117'])}${field('Fecha del pago','2026-09-24','date')}${field('Monto (MXN)','500.00','number')}<div class="notice">El pago no puede exceder el saldo ni tener fecha futura o anterior al acuerdo. Una vez registrado, se conserva como historial.</div><button class="btn primary" data-demo="save">Confirmar registro de pago</button></div><div class="card col5"><h3>Antes de confirmar</h3><p>Saldo actual: <strong>MXN 3,900.00</strong></p><p>Pago propuesto: <strong>MXN 500.00</strong></p><p>Saldo estimado: <strong>MXN 3,400.00</strong></p>${notice('El gestor define cuánto pagar y a cuál de sus cuentas se aplica.')}</div></div>`,'gestor'),
+      movement: () => shell(`${title('Registrar movimiento de saldo','Solo para administrador. No edita pagos anteriores.',b('Cancelar','account'))}<div class="grid"><div class="card col7"><h3>Datos del movimiento</h3>${select('Cuenta',['CTA-104 · Deudor 104','CTA-117 · Deudor 117'])}${select('Tipo',['Interés','Recargo','Descuento','Condonación','Reembolso','Reversión de pago','Ajuste de cargo','Ajuste de abono'])}${field('Importe (MXN)','50.00','number')}${field('Fecha efectiva','2026-09-24','date')}${select('Pago de origen (si aplica)',['No aplica','Pago #1 · MXN 1,100.00'])}<label class="field">Motivo<textarea class="input" rows="3">Descripción de la corrección.</textarea></label><button class="btn primary" data-demo="save">Confirmar movimiento</button></div><div class="card col5"><h3>Efecto previsto</h3><p>Saldo anterior: <strong>MXN 3,900.00</strong></p><p>Impacto: <strong>+ MXN 50.00</strong></p><p>Saldo estimado: <strong>MXN 3,950.00</strong></p>${notice('Reembolso y reversión deben señalar un pago original de la misma cuenta.')}</div></div>`,'administrador'),
+      users: () => shell(`${title('Usuarios y asignaciones','El administrador administra el rol y estado de cada perfil.',b('Invitar usuario','users'))}${table(['Usuario','Rol','Activo','Cuentas','Acciones'],[['Admin A',pill('Administrador'),'Sí','—','Ver perfil'],['Gestor A',pill('Gestor'),'Sí','8','Ver · Desactivar'],['Gestor B',pill('Gestor'),'No','0','Ver']])}<h3 class="section">Reasignar cuenta</h3><div class="card"><div class="form-grid">${select('Cuenta',['CTA-104 · Gestor A','CTA-117 · Gestor B'])}${select('Nuevo gestor',['Gestor B','Sin asignar'])}</div><button class="btn primary" data-demo="save">Confirmar reasignación</button><div class="notice" style="margin-top:14px">Antes de desactivar un gestor, reasigna todas sus cuentas. Cada cambio queda guardado automáticamente en el historial.</div></div>`,'administrador'),
+      reports: () => shell(`${title('Reportes ejecutivos',state.role==='administrador'?'Todos los reportes generados.':'Reportes en los que figuro como destinatario.',state.role==='administrador'?b('Generar reporte','new-report',true):'')}<div class="filters">${field('Título','Buscar...')}${select('Periodo',['Todos','Mes actual','Mes anterior'])}${select('Entrega',['Cualquiera','Pendiente','Entregado'])}<button class="btn">Filtrar</button></div>${table(['Reporte','Periodo','Generado','Destinatarios','Entrega','Acción'],[['Cumplimiento mensual','01–30 sep 2026','24 sep 2026',state.role==='administrador'?'2 gestores':'Yo',pill('Entregado'),'<button class="link" data-demo="pdf">Ver PDF</button>'],['Cuentas en mora','01–30 sep 2026','24 sep 2026',state.role==='administrador'?'1 gestor':'Yo',pill('Pendiente'),'<button class="link" data-demo="pdf">Ver PDF</button>']])}${notice('Selecciona un reporte para revisar o descargar su PDF.')}`),
+      'new-report': () => shell(`${title('Generar y entregar reporte','El administrador revisa el contenido antes de distribuir el PDF.',b('Cancelar','reports'))}<div class="steps"><span class="active">1. Configurar</span><span>2. Revisar contenido</span><span>3. Generar y entregar</span></div><div class="grid"><div class="card col5"><h3>Configuración</h3>${field('Título','Cumplimiento de pagos · septiembre 2026')}${field('Desde','2026-09-01','date')}${field('Hasta','2026-09-30','date')}${select('Alcance',['Toda la cartera','Por gestor'])}<h3 class="section">Destinatarios</h3><label class="checkline"><input type="checkbox" checked> Gestor A</label><label class="checkline"><input type="checkbox" checked> Gestor B</label><button class="btn" data-demo="preview">Actualizar vista previa</button></div><div class="card col7"><h3>Vista previa del documento</h3><div class="placeholder" style="min-height:270px">PDF ejecutivo<br>Resumen, indicadores y gráficas<br>Interpretación en lenguaje natural</div><p class="muted">Los datos y texto mostrados son de ejemplo. El contenido definitivo está pendiente.</p><div class="row">${b('Volver a reportes','reports')}<button class="btn primary" data-demo="save">Generar PDF y registrar destinatarios</button></div></div></div>${notice('Revisa el periodo y los destinatarios antes de generar el reporte.')}`,'administrador')
+    };
+    const commonState = (screen,html) => {
+      if(state.status==='normal' || screen.id==='login' || screen.id==='face') return html;
+      const head = `<div class="apphead"><div class="logo">SolvIA</div><div class="right">${state.role==='administrador'?'Administrador':'Gestor'} <span class="avatar">U</span></div></div>`;
+      if(state.status==='loading') return `${head}<div class="page">${title(screen.name,'Cargando información…')}<div class="card"><div class="skeleton" style="width:50%"></div><div class="skeleton" style="width:90%"></div><div class="skeleton" style="width:73%"></div><div class="skeleton" style="width:95%"></div></div></div>`;
+      if(state.status==='error') return `${head}<div class="page">${title(screen.name,'No fue posible obtener la información.') }<div class="notice error">No se pudo cargar esta vista. Comprueba la conexión e inténtalo nuevamente.</div><button class="btn primary" data-status="normal">Reintentar</button></div>`;
+      return `${head}<div class="page">${title(screen.name,'No hay registros que mostrar todavía.') }<div class="empty"><div><h3>Aún no hay información</h3><p>Los registros aparecerán aquí cuando se completen las acciones correspondientes.</p>${screen.access==='administrador'?b('Volver al panel','admin-home'):b('Volver a mi panel','manager-home')}</div></div></div>`;
+    };
+    function navigate(id) { const screen=screens.find(x=>x.id===id); if(!screen) return; if(screen.access!=='ambos' && screen.access!==state.role) state.role=screen.access; state.page=id; state.status='normal'; $('role').value=state.role; $('state').value='normal'; render(); window.scrollTo({top:0,behavior:'smooth'}); }
+    function render() {
+      const s=screens.find(x=>x.id===state.page); $('screen-name').textContent=`${String(screens.indexOf(s)+1).padStart(2,'0')} · ${s.name}`; $('screen-desc').textContent=s.description; $('screen-role').textContent=s.access==='ambos'?'Ambos roles':s.access;
+      let last=''; $('nav').innerHTML=screens.filter(x=>x.access==='ambos'||x.access===state.role).map(x=>{let header='';if(last!==x.group){last=x.group;header=`<h2>${x.group}</h2>`}return `${header}<button type="button" class="navitem" data-go="${x.id}" ${x.id===state.page?'aria-current="page"':''}><span class="num">${String(screens.indexOf(x)+1).padStart(2,'0')}</span>${x.name}</button>`}).join('');
+      $('frame').innerHTML=commonState(s,views[s.id]());
+    }
+    document.addEventListener('click',ev=>{
+      const target=ev.target.closest('[data-go],[data-demo],[data-status],[data-login]'); if(!target) return;
+      if(target.dataset.login) navigate($('demo-face')?.checked?'face':(state.role==='administrador'?'admin-home':'manager-home'));
+      else if(target.dataset.go) navigate(target.dataset.go);
+      else if(target.dataset.status){state.status=target.dataset.status;$('state').value=state.status;render()}
+      else if(target.dataset.demo) alert('Wireframe: esta acción se muestra para revisar el flujo. No se enviaron ni guardaron datos.');
+    });
+    $('role').addEventListener('change',ev=>{state.role=ev.target.value;const s=screens.find(x=>x.id===state.page);if(s.access!=='ambos'&&s.access!==state.role)state.page=state.role==='administrador'?'admin-home':'manager-home';render()});
+    $('state').addEventListener('change',ev=>{state.status=ev.target.value;render()});
+    $('print').addEventListener('click',()=>{
+      const save={...state};$('printroot').innerHTML=screens.map((s,i)=>{state.role=s.access==='ambos'?'administrador':s.access;state.status='normal';return `<section class="printpage"><h2 class="print-title">${String(i+1).padStart(2,'0')} · ${s.name} · ${s.access==='ambos'?'Ambos roles':s.access}</h2><div class="frame">${views[s.id]()}</div></section>`}).join('');Object.assign(state,save);window.print();
+    });
+    render();
+  </script>
+</body>
+</html>
