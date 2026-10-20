@@ -11,6 +11,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         this.pool = new Pool({
             connectionString: this.config.getOrThrow<string>('DATABASE_URL'),
             max: 5,
+            // CURRENT_DATE de los triggers debe ser la fecha de Mexico; el
+            // pooler conserva GMT aunque la base tenga otra zona por defecto.
+            options: '-c TimeZone=America/Mexico_City',
         });
     }
 
