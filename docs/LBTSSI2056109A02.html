@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Práctica 4.1 - Avance de Proyecto 2 - SolvIA</title>
+  <style>
+    @page {
+      size: letter;
+      margin: 20mm;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #1e293b;
+      line-height: 1.55;
+      margin: 0;
+      padding: 24px;
+      background: #f8fafc;
+    }
+    .page-container {
+      max-width: 850px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 45px 55px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      border-radius: 8px;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 3px solid #0284c7;
+      padding-bottom: 20px;
+      margin-bottom: 28px;
+    }
+    .header h1 {
+      font-size: 21px;
+      margin: 0;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .header h2 {
+      font-size: 17px;
+      margin: 6px 0 0;
+      color: #0284c7;
+      font-weight: 600;
+    }
+    .header h3 {
+      font-size: 15px;
+      margin: 10px 0 0;
+      color: #475569;
+      font-weight: 500;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      background: #f1f5f9;
+      padding: 16px 20px;
+      border-radius: 6px;
+      margin-bottom: 25px;
+      font-size: 13.5px;
+    }
+    .meta-grid strong {
+      color: #0f172a;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 18px 0;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 9px 12px;
+      text-align: left;
+    }
+    th {
+      background: #f8fafc;
+      color: #0f172a;
+      font-weight: 600;
+    }
+    tr:nth-child(even) td {
+      background: #fcfcfd;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .status-done {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .status-next {
+      background: #e0f2fe;
+      color: #0369a1;
+    }
+    .status-pending {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+    h2.section-title {
+      font-size: 16px;
+      color: #0f172a;
+      border-left: 4px solid #0284c7;
+      padding-left: 10px;
+      margin-top: 30px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    h3.subsection-title {
+      font-size: 14.5px;
+      color: #0369a1;
+      margin-top: 18px;
+      margin-bottom: 8px;
+    }
+    p, li {
+      font-size: 13.5px;
+      color: #334155;
+    }
+    ul {
+      margin: 6px 0 12px;
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 4px;
+    }
+    .formula-box {
+      background: #f8fafc;
+      border: 1px dashed #94a3b8;
+      border-radius: 6px;
+      padding: 10px 16px;
+      margin: 12px 0;
+      font-family: 'Cambria Math', 'Georgia', serif;
+      font-size: 13.5px;
+      text-align: center;
+      color: #0f172a;
+    }
+    .highlight-card {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin: 15px 0;
+      font-size: 13px;
+    }
+    @media print {
+      body {
+        background: #ffffff;
+        padding: 0;
+      }
+      .page-container {
+        box-shadow: none;
+        padding: 0;
+        max-width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-container">
+
+  <div class="header">
+    <h1>Universidad Autónoma de Nuevo León</h1>
+    <h2>Facultad de Ingeniería Mecánica y Eléctrica</h2>
+    <h3>Laboratorio de Temas Selectos de Sistemas Inteligentes — Reporte de Avance 2</h3>
+  </div>
+
+  <div class="meta-grid">
+    <div><strong>Materia:</strong> Laboratorio de Temas Selectos de Sistemas Inteligentes (LBTSSI)</div>
+    <div><strong>Grupo / Hora:</strong> Grupo 105 &nbsp;|&nbsp; Hora V3 (Salón 4106)</div>
+    <div><strong>Docente:</strong> Ing. Raquel Martínez Martínez</div>
+    <div><strong>Equipo:</strong> Equipo 3</div>
+    <div><strong>Proyecto:</strong> SolvIA — Sistema Inteligente de Seguimiento de Pagos</div>
+    <div><strong>Fecha de Entrega:</strong> 9 de octubre de 2026</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Integrante</th>
+        <th style="width: 120px;">Matrícula</th>
+        <th style="width: 90px;">Carrera</th>
+        <th>Rol Principal</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="font-weight: 600; background: #f0f9ff;">
+        <td>Alberto Jairzinho Jáuregui Chio</td>
+        <td>2056109</td>
+        <td>ITS</td>
+        <td>FullStack (NestJS + React + Neon DB)</td>
+      </tr>
+      <tr>
+        <td>Diego Asael Hernández Cardona</td>
+        <td>(pendiente)</td>
+        <td>ITS</td>
+        <td>Líder de Proyecto / Microservicio Python</td>
+      </tr>
+      <tr>
+        <td>Claudio Jesús Robles Mendo</td>
+        <td>2132035</td>
+        <td>ITS</td>
+        <td>IA - Reconocimiento Facial (FaceNet)</td>
+      </tr>
+      <tr>
+        <td>Juan Daniel Carrillo López</td>
+        <td>1945700</td>
+        <td>ITS</td>
+        <td>QA / Documentación y Pruebas</td>
+      </tr>
+      <tr>
+        <td>Rubén Mario Lozano Aguilera</td>
+        <td>2112146</td>
+        <td>ITS</td>
+        <td>Frontend / UX y Detección Facial</td>
+      </tr>
+      <tr>
+        <td>Josué Alejandro Lara Maldonado</td>
+        <td>1999203</td>
+        <td>ITS</td>
+        <td>IA - Generación de Reportes (MCP + LLM)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 class="section-title">1. Resumen Ejecutivo y Objetivo del Avance</h2>
+  <p>
+    El presente documento reporta el avance formal del proyecto <strong>SolvIA</strong> correspondiente a la 
+    <strong>Semana 4 (5 al 9 de octubre)</strong> de acuerdo con el cronograma acordado. 
+    El objetivo de esta fase fue implementar y dejar operando de manera independiente los módulos de 
+    <strong>visión por computadora</strong> para el sistema de acceso biométrico:
+  </p>
+  <ul>
+    <li><strong>Microservicio en Python (FastAPI):</strong> Extracción de características biométricas (embeddings de 512 dimensiones) y verificación por similitud coseno con umbral calibrado.</li>
+    <li><strong>Módulo de Detección Facial en Navegador:</strong> Adquisición de stream de webcam, control de encuadre en tiempo real y preparación de frames serializados en Base64.</li>
+  </ul>
+
+  <h2 class="section-title">2. Estado y Seguimiento del Cronograma</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 70px;">Semana</th>
+        <th style="width: 110px;">Fechas</th>
+        <th>Actividad</th>
+        <th>Entregable</th>
+        <th style="width: 110px; text-align: center;">Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Semana 1</td>
+        <td>7 – 11 sept</td>
+        <td>Diseño de la BD relacional en PostgreSQL; repositorios.</td>
+        <td>Esquema BD y repos inicializados.</td>
+        <td style="text-align: center;"><span class="status-badge status-done">Completado</span></td>
+      </tr>
+      <tr>
+        <td>Semana 2</td>
+        <td>14 – 18 sept</td>
+        <td>Backend (NestJS) endpoints base y frontend en React.</td>
+        <td>API funcional + prototipo frontend.</td>
+        <td style="text-align: center;"><span class="status-badge status-done">Completado</span></td>
+      </tr>
+      <tr>
+        <td>Semana 3</td>
+        <td>21 sept</td>
+        <td>Arranque de microservicio Python (FastAPI).</td>
+        <td>Microservicio inicializado.</td>
+        <td style="text-align: center;"><span class="status-badge status-done">Completado</span></td>
+      </tr>
+      <tr style="background: #fafafa; color: #64748b;">
+        <td>—</td>
+        <td>22 sept – 2 oct</td>
+        <td>Exámenes parciales (sin actividades de proyecto).</td>
+        <td>—</td>
+        <td style="text-align: center;"><span class="status-badge status-done">Completado</span></td>
+      </tr>
+      <tr style="background: #f0fdf4; font-weight: 600;">
+        <td>Semana 4</td>
+        <td>5 – 9 oct</td>
+        <td>Detección facial en navegador y microservicio de verificación facial en Python.</td>
+        <td>Módulo detección facial + microservicio verificación facial por separado.</td>
+        <td style="text-align: center;"><span class="status-badge status-done">100% Cumplido</span></td>
+      </tr>
+      <tr>
+        <td>Semana 5</td>
+        <td>12 – 16 oct</td>
+        <td>Integración login biométrico end-to-end (Front ↔ Back ↔ Microservicio).</td>
+        <td>Flujo login facial completo.</td>
+        <td style="text-align: center;"><span class="status-badge status-next">Próximo Hito</span></td>
+      </tr>
+      <tr>
+        <td>Semana 6</td>
+        <td>19 – 23 oct</td>
+        <td>Dashboard de gráficas y métricas de morosidad (Recharts).</td>
+        <td>Dashboard con visualizaciones reales.</td>
+        <td style="text-align: center;"><span class="status-badge status-pending">Pendiente</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 class="section-title">3. Desarrollo Técnico y Fundamento de Inteligencia Artificial</h2>
+
+  <h3 class="subsection-title">3.1. Microservicio de Verificación Facial (FastAPI + FaceNet)</h3>
+  <p>
+    El servicio de IA reside en <code>services/ai-service</code> y procesa solicitudes mediante una arquitectura de dos redes neuronales profundas encadenadas:
+  </p>
+  <ul>
+    <li><strong>MTCNN (Multi-task Cascaded Convolutional Networks):</strong> Localiza rostros en el frame recibido, evalúa la calidad visual y alinea la cara a un recorte estándar de 160×160 píxeles. Filtra imágenes con más de un rostro o con baja resolución (menor a 80 px).</li>
+    <li><strong>Inception-ResNet-v1 (Pesos VGGFace2):</strong> Red convolucional profunda que proyecta el rostro en un espacio euclidiano de <strong>512 dimensiones</strong>, generando el vector de características (<em>embedding</em>).</li>
+  </ul>
+
+  <div class="formula-box">
+    <strong>Normalización L2 y Similitud Coseno:</strong><br>
+    v̂ = v / ||v||₂ &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; Similitud(a, b) = a · b &nbsp;∈ [-1, 1]
+  </div>
+
+  <p>
+    Para cada usuario registrado se conserva una galería de vectores de referencia (estrategia <em>"Best of N"</em> con k=4 fotos). La verificación biométrica 1:1 calcula el puntaje máximo:
+  </p>
+  <div class="formula-box">
+    Score = max<sub>j</sub> { Similitud(probe, gallery<sub>j</sub>) } &nbsp;&nbsp;⇒&nbsp;&nbsp; match = (Score ≥ MATCH_THRESHOLD)
+  </div>
+
+  <h3 class="subsection-title">3.2. Calibración Empírica de Umbral (Script de Experimento)</h3>
+  <p>
+    A través de <code>scripts/experiment.py</code> se cuantificó la separación entre clases utilizando muestras genuinas e impostoras:
+  </p>
+  <ul>
+    <li><strong>Comparación Intra-clase (Tu vs Tu):</strong> Similitudes observadas entre <strong>0.65 y 0.88</strong>.</li>
+    <li><strong>Comparación Inter-clase (Tu vs Otros):</strong> Similitudes observadas entre <strong>0.12 y 0.28</strong>.</li>
+    <li><strong>Margen de separación (Gap):</strong> Superior a <strong>0.35</strong>, lo que valida la selección de un <code>MATCH_THRESHOLD = 0.40</code> con cero falsas aceptaciones (FAR ≈ 0%).</li>
+  </ul>
+
+  <h3 class="subsection-title">3.3. Detección Facial en Navegador (Frontend)</h3>
+  <p>
+    Se desarrolló el componente de captura de video que interactúa con la cámara del dispositivo:
+  </p>
+  <ul>
+    <li>Acceso nativo mediante <code>navigator.mediaDevices.getUserMedia</code>.</li>
+    <li>Encuadre asistido con máscara elíptica de posicionamiento.</li>
+    <li>Captura de snapshot a resolución nativa, serializado a Base64 listo para transmisión.</li>
+  </ul>
+
+  <h3 class="subsection-title">3.4. Infraestructura de Base de Datos y Backend (Neon PostgreSQL)</h3>
+  <p>
+    Se estableció la conexión del backend (NestJS) a la base de datos PostgreSQL hospedada en Neon Serverless, integrando el esquema relacional final con tablas de usuarios, roles de analista, deudores, movimientos y planes de pago.
+  </p>
+
+  <h2 class="section-title">4. Conclusiones y Próximo Hito (Semana 5)</h2>
+  <div class="highlight-card">
+    <strong>Conclusión del Avance:</strong> Los entregables comprometidos para la Semana 4 se encuentran 100% implementados y verificados de manera unitaria y aislada. El microservicio responde a los endpoints <code>/health</code>, <code>/enroll</code> y <code>/verify</code> con control estricto de calidad fotográfica.
+    <br><br>
+    <strong>Siguiente Paso (Semana 5 — 12 a 16 de octubre):</strong> Integración end-to-end conectando el componente de cámara de React con el backend en NestJS y la validación en el microservicio de Python para completar el flujo íntegro del Login Biométrico.
+  </div>
+
+</div>
+
+</body>
+</html>

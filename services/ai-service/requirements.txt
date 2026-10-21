@@ -1,0 +1,14 @@
+# --- API ---
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.6
+pydantic-settings>=2.2
+python-multipart>=0.0.9   # solo si luego cambias a multipart/form-data
+
+# --- Visión / modelo ---
+numpy>=1.26
+opencv-python>=4.9
+pillow>=10.2
+torch>=2.2                # en Windows el wheel de PyPI ya viene solo-CPU
+torchvision>=0.17
+facenet-pytorch>=2.6.0    # MTCNN (detección+alineación) + InceptionResnetV1 (embedding)
