@@ -1,0 +1,1189 @@
+openapi: 3.0.3
+info:
+  title: SolvIA API
+  version: 1.0.0
+  description: |
+    API de SolvIA (NestJS) para el seguimiento de planes de pago de deudores ficticios.
+
+    **Flujo para probar en Apidog**
+    1. `POST /sign-in/email` (Neon Auth) con el correo y contraseña del usuario. Apidog guarda la cookie de sesión.
+    2. `GET /get-session` (Neon Auth): copia el header de respuesta `set-auth-jwt` en la variable de entorno `token`
+       (o usa el post-procesador "Extraer variable" → Header `set-auth-jwt`). Alternativa: `GET /token` devuelve `{ "token": "..." }`.
+    3. Llama a la API de SolvIA con `Authorization: Bearer {{token}}`. El JWT de Neon Auth caduca en ~15 min.
+
+    **Convenciones:** JSON en camelCase; IDs `bigint` como cadena (`"12"`); importes como cadena con 2 decimales (`"1250.50"`);
+    fechas `YYYY-MM-DD`; listas paginadas con `page`/`pageSize` → `{ items, total, page, pageSize }`.
+
+    **Alcance por rol:** el gestor solo ve deudores/cuentas que tiene asignadas; un ID ajeno responde 404.
+
+    **Verificación facial:** hasta el bloque D, `FaceVerifiedGuard` deja pasar todo y `/me` devuelve `facial.verificado: true`.
+    Después, las rutas de negocio exigirán además la cookie httpOnly `solvia_face`.
+
+    **Errores:** siempre `{ "error": { "code", "message", "details" } }`.
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Backend local (NestJS)
+tags:
+  - name: Neon Auth
+    description: Rutas propias de Neon Auth (Better Auth). Se llaman directamente al servicio de Neon, no al backend.
+  - name: Sesión
+  - name: Deudores
+  - name: Cuentas
+  - name: Pagos
+  - name: Movimientos
+  - name: Panel
+  - name: Usuarios
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ---------------------------------------------------------------- Neon Auth
+  /sign-in/email:
+    servers: &neonAuth
+      - url: '{neonAuthUrl}'
+        description: Neon Auth de la rama desarrollo (valor de NEON_AUTH_BASE_URL)
+        variables:
+          neonAuthUrl:
+            default: https://ep-XXXX.neonauth.REGION.aws.neon.tech/neondb/auth
+            description: Copia aquí NEON_AUTH_BASE_URL (sin barra final). No lo subas al repositorio.
+    post:
+      tags: [Neon Auth]
+      summary: Iniciar sesión con correo y contraseña
+      description: |
+        Crea una sesión en Neon Auth y devuelve la cookie de sesión (`Set-Cookie`).
+        Neon Auth exige un header `Origin` que esté entre los dominios de confianza (p. ej. `http://localhost:5173`).
+      operationId: neonSignIn
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+                rememberMe: { type: boolean, default: true }
+            example:
+              email: gestor1@solvia.demo
+              password: '********'
+      responses:
+        '200':
+          description: Sesión creada. La cookie de sesión llega en `Set-Cookie`.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirect: { type: boolean }
+                  token: { type: string, description: Token de sesión (no es el JWT) }
+                  user: { $ref: '#/components/schemas/NeonUser' }
+        '401':
+          description: Credenciales inválidas
+        '403':
+          description: Origin no permitido
+
+  /get-session:
+    servers: *neonAuth
+    get:
+      tags: [Neon Auth]
+      summary: Obtener la sesión actual y el JWT
+      description: |
+        Requiere la cookie de sesión de `/sign-in/email`. El JWT para la API de SolvIA viene
+        en el header de respuesta **`set-auth-jwt`**; guárdalo en la variable `token`.
+      operationId: neonGetSession
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: Sesión vigente (o `null` si no hay sesión)
+          headers:
+            set-auth-jwt:
+              description: JWT (EdDSA) firmado por Neon Auth; `sub` = ID del usuario
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                nullable: true
+                type: object
+                properties:
+                  session:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      userId: { type: string, format: uuid }
+                      expiresAt: { type: string, format: date-time }
+                  user: { $ref: '#/components/schemas/NeonUser' }
+
+  /token:
+    servers: *neonAuth
+    get:
+      tags: [Neon Auth]
+      summary: Obtener el JWT en el cuerpo (alternativa a get-session)
+      operationId: neonToken
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: JWT de la sesión actual
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+        '401':
+          description: Sin sesión
+
+  /sign-out:
+    servers: *neonAuth
+    post:
+      tags: [Neon Auth]
+      summary: Cerrar sesión
+      operationId: neonSignOut
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+            example: {}
+      responses:
+        '200':
+          description: Sesión cerrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+
+  /jwks:
+    servers: *neonAuth
+    get:
+      tags: [Neon Auth]
+      summary: Claves públicas para verificar el JWT (las usa el backend)
+      operationId: neonJwks
+      security: []
+      responses:
+        '200':
+          description: JSON Web Key Set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items: { type: object }
+
+  # ------------------------------------------------------------------- Sesión
+  /me:
+    get:
+      tags: [Sesión]
+      summary: Perfil del usuario autenticado y estado facial
+      description: Solo exige el JWT de Neon Auth (no la verificación facial); es el punto de partida del acceso.
+      operationId: obtenerMe
+      responses:
+        '200':
+          description: Perfil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403':
+          description: Sin perfil (`PROFILE_REQUIRED`) o perfil inactivo (`PROFILE_INACTIVE`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # ----------------------------------------------------------------- Deudores
+  /deudores:
+    get:
+      tags: [Deudores]
+      summary: Listar deudores
+      description: El gestor solo ve deudores con al menos una cuenta suya; `numeroCuentas` cuenta solo las visibles.
+      operationId: listarDeudores
+      parameters:
+        - name: q
+          in: query
+          description: Busca en nombre (contiene) o prefijo de CURP/RFC
+          schema: { type: string, maxLength: 100 }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de deudores
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pagina'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/DeudorListado' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+    post:
+      tags: [Deudores]
+      summary: Crear deudor (administrador)
+      operationId: crearDeudor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearDeudor' }
+            example:
+              nombre: Laura Méndez Ortiz
+              curp: MEOL900215MNLNRR08
+              telefono: '8112345678'
+              ciudad: Monterrey
+              segmento: consumo
+              scoreBuro: 640
+      responses:
+        '201':
+          description: Deudor creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Deudor' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '409':
+          description: CURP o RFC ya registrado (`DUPLICATE_IDENTIFIER`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /deudores/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Deudores]
+      summary: Detalle de deudor con sus cuentas visibles
+      operationId: obtenerDeudor
+      responses:
+        '200':
+          description: Deudor
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeudorDetalle' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    patch:
+      tags: [Deudores]
+      summary: Actualizar deudor (administrador)
+      description: Todos los campos son opcionales; una cadena vacía en un campo opcional lo deja en `null`.
+      operationId: actualizarDeudor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActualizarDeudor' }
+            example:
+              telefono: '8187654321'
+              scoreBuro: 655
+      responses:
+        '200':
+          description: Deudor actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Deudor' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: CURP o RFC duplicado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # ------------------------------------------------------------------ Cuentas
+  /cuentas:
+    get:
+      tags: [Cuentas]
+      summary: Listar cuentas con estado, mora y prioridad
+      description: |
+        Calcula saldo, monto exigible/vencido, estado del plan, días de mora y prioridad P a la `fechaCorte`.
+        El gestor siempre ve solo las suyas (se ignoran `responsableId` y `sinAsignar`).
+      operationId: listarCuentas
+      parameters:
+        - name: q
+          in: query
+          description: Busca en referencia externa o nombre del deudor
+          schema: { type: string, maxLength: 100 }
+        - name: deudorId
+          in: query
+          schema: { $ref: '#/components/schemas/Id' }
+        - name: responsableId
+          in: query
+          description: Solo administrador
+          schema: { type: string, format: uuid }
+        - name: sinAsignar
+          in: query
+          description: Solo administrador
+          schema: { type: boolean }
+        - name: estadoPlan
+          in: query
+          schema: { $ref: '#/components/schemas/EstadoPlan' }
+        - name: liquidada
+          in: query
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/FechaCorte'
+        - name: orden
+          in: query
+          description: '`prioridad` = mayor P primero'
+          schema:
+            type: string
+            enum: [id, prioridad, saldo]
+            default: id
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de cuentas
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pagina'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Cuenta' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+    post:
+      tags: [Cuentas]
+      summary: Crear cuenta con plan y cuotas (administrador)
+      description: |
+        Cuenta, plan y cuotas se crean en una sola transacción. Las cuotas deben sumar exactamente `montoInicial`
+        (si no, 422 `PLAN_INVALID`). `responsableId`, si se envía, debe ser un gestor activo.
+      operationId: crearCuenta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearCuenta' }
+            example:
+              deudorId: '1'
+              referenciaExterna: SOL-015
+              producto: Préstamo personal
+              montoInicial: '3000.00'
+              moneda: MXN
+              fechaOriginacion: '2026-09-01'
+              plan:
+                fechaAcuerdo: '2026-10-01'
+                cuotas:
+                  - { numero: 1, fechaVencimiento: '2026-11-01', monto: '1000.00' }
+                  - { numero: 2, fechaVencimiento: '2026-12-01', monto: '1000.00' }
+                  - { numero: 3, fechaVencimiento: '2027-01-01', monto: '1000.00' }
+      responses:
+        '201':
+          description: Cuenta creada (mismo formato que el detalle)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CuentaDetalle' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '409':
+          description: Referencia externa duplicada (`DUPLICATE_IDENTIFIER`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/ReglaDeNegocio' }
+
+  /cuentas/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Cuentas]
+      summary: Detalle de cuenta con plan y estado de cada cuota
+      operationId: obtenerCuenta
+      parameters:
+        - $ref: '#/components/parameters/FechaCorte'
+      responses:
+        '200':
+          description: Cuenta
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CuentaDetalle' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /cuentas/{id}/asignacion:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    patch:
+      tags: [Cuentas]
+      summary: Asignar o quitar gestor (administrador)
+      description: '`responsableId: null` deja la cuenta sin asignar. Si no cambia el responsable, no se registra historial.'
+      operationId: asignarCuenta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [responsableId]
+              properties:
+                responsableId:
+                  type: string
+                  format: uuid
+                  nullable: true
+            example:
+              responsableId: 00000000-0000-0000-0000-000000000000
+      responses:
+        '200':
+          description: Cuenta actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CuentaDetalle' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '422':
+          description: El responsable no es un gestor activo (`INVALID_ASSIGNMENT`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /cuentas/{id}/asignaciones:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Cuentas]
+      summary: Historial de asignaciones de la cuenta
+      operationId: historialAsignaciones
+      responses:
+        '200':
+          description: Historial (más reciente primero)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Asignacion' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  # -------------------------------------------------------------------- Pagos
+  /cuentas/{cuentaId}/pagos:
+    parameters:
+      - $ref: '#/components/parameters/CuentaIdPath'
+    get:
+      tags: [Pagos]
+      summary: Listar pagos de la cuenta
+      operationId: listarPagos
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de pagos (más reciente primero)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pagina'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Pago' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    post:
+      tags: [Pagos]
+      summary: Registrar pago (solo el gestor asignado)
+      description: |
+        `fechaPago` debe estar entre la fecha del acuerdo y hoy (422 `FECHA_FUERA_DE_RANGO`);
+        `monto` no puede superar el saldo (422 `SALDO_INSUFICIENTE`). Los pagos son inmutables.
+      operationId: registrarPago
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearPago' }
+            example:
+              fechaPago: '2026-10-20'
+              monto: '500.00'
+      responses:
+        '201':
+          description: Pago registrado, con el saldo resultante
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PagoCreado' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403':
+          description: Rol distinto de gestor, o el gestor no es el asignado (`FORBIDDEN`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '422': { $ref: '#/components/responses/ReglaDeNegocio' }
+
+  # -------------------------------------------------------------- Movimientos
+  /cuentas/{cuentaId}/movimientos:
+    parameters:
+      - $ref: '#/components/parameters/CuentaIdPath'
+    get:
+      tags: [Movimientos]
+      summary: Listar movimientos de saldo de la cuenta
+      operationId: listarMovimientos
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de movimientos
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Pagina'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Movimiento' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    post:
+      tags: [Movimientos]
+      summary: Registrar movimiento de saldo (administrador)
+      description: |
+        `monto` siempre positivo: los tipos de cargo suman al saldo (`interes`, `recargo`, `reembolso`, `reversion_pago`, `ajuste_cargo`)
+        y los de abono restan (`descuento`, `condonacion`, `ajuste_abono`).
+        `pagoOrigenId` es obligatorio solo para `reembolso` y `reversion_pago`, y prohibido en los demás.
+      operationId: registrarMovimiento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearMovimiento' }
+            examples:
+              recargo:
+                value:
+                  tipo: recargo
+                  monto: '150.00'
+                  fechaEfectiva: '2026-10-20'
+                  motivo: Recargo por atraso
+              reversion:
+                value:
+                  tipo: reversion_pago
+                  monto: '500.00'
+                  fechaEfectiva: '2026-10-20'
+                  motivo: Pago rechazado por el banco
+                  pagoOrigenId: '3'
+      responses:
+        '201':
+          description: Movimiento registrado, con el saldo resultante
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MovimientoCreado' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '422': { $ref: '#/components/responses/ReglaDeNegocio' }
+
+  # -------------------------------------------------------------------- Panel
+  /panel/resumen:
+    get:
+      tags: [Panel]
+      summary: Métricas del tablero
+      description: |
+        Totales de la cartera visible, distribución por estado del plan, morosidad por rangos de días,
+        pagos frente a lo esperado por mes (por defecto, los últimos 6 meses) y vencimientos de los próximos 30 días.
+        `totales.sinAsignar` solo aparece para el administrador.
+      operationId: panelResumen
+      parameters:
+        - $ref: '#/components/parameters/FechaCorte'
+        - name: desde
+          in: query
+          schema: { $ref: '#/components/schemas/Fecha' }
+        - name: hasta
+          in: query
+          schema: { $ref: '#/components/schemas/Fecha' }
+      responses:
+        '200':
+          description: Resumen
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PanelResumen' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+
+  /panel/prioridades:
+    get:
+      tags: [Panel]
+      summary: Cuentas que requieren atención, ordenadas por P
+      description: |
+        P = 60·min(vencido/exigible, 1) + 40·min(díasMora/30, 1); P = 0 si no hay nada exigible.
+        Solo devuelve cuentas con P > 0. P es un puntaje de atención, no una probabilidad de impago.
+      operationId: panelPrioridades
+      parameters:
+        - $ref: '#/components/parameters/FechaCorte'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        '200':
+          description: Ranking
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Prioridad' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+
+  # ----------------------------------------------------------------- Usuarios
+  /usuarios:
+    get:
+      tags: [Usuarios]
+      summary: Listar usuarios (administrador)
+      description: '`POST /usuarios` (alta/invitación en Neon Auth) aún no está implementado.'
+      operationId: listarUsuarios
+      parameters:
+        - name: rol
+          in: query
+          schema: { $ref: '#/components/schemas/Rol' }
+        - name: activo
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Usuarios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Usuario' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+
+  /usuarios/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Usuarios]
+      summary: Detalle de usuario (administrador)
+      operationId: obtenerUsuario
+      responses:
+        '200':
+          description: Usuario
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuario' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    patch:
+      tags: [Usuarios]
+      summary: Cambiar rol o activar/desactivar (administrador)
+      description: |
+        409 `SELF_MODIFICATION` si es uno mismo; 409 `LAST_ADMIN` si dejaría sin administradores activos;
+        409 `USER_HAS_ACCOUNTS` si es un gestor con cuentas asignadas.
+      operationId: actualizarUsuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                rol: { $ref: '#/components/schemas/Rol' }
+                activo: { type: boolean }
+            example:
+              activo: false
+      responses:
+        '200':
+          description: Usuario actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuario' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: Conflicto de reglas de usuarios
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT de Neon Auth (header `set-auth-jwt` de `/get-session`).
+
+  parameters:
+    Origin:
+      name: Origin
+      in: header
+      required: true
+      description: Debe ser un dominio de confianza de Neon Auth
+      schema: { type: string, default: 'http://localhost:5173' }
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Id' }
+    CuentaIdPath:
+      name: cuentaId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Id' }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    FechaCorte:
+      name: fechaCorte
+      in: query
+      description: Fecha a la que se calcula el estado (por defecto, hoy en America/Mexico_City)
+      schema: { $ref: '#/components/schemas/Fecha' }
+
+  responses:
+    EntradaInvalida:
+      description: Datos inválidos (`INVALID_INPUT`); `details` lista los errores por campo
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error:
+              code: INVALID_INPUT
+              message: Datos de entrada inválidos
+              details:
+                monto: [monto debe ser un importe positivo con hasta dos decimales]
+    NoAutenticado:
+      description: Falta el token o es inválido/vencido (`UNAUTHENTICATED`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Prohibido:
+      description: El rol no permite la operación (`FORBIDDEN`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NoEncontrado:
+      description: No existe o no es visible para el usuario (`NOT_FOUND`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ReglaDeNegocio:
+      description: |
+        Regla de negocio violada: `SALDO_INSUFICIENTE`, `FECHA_FUERA_DE_RANGO`, `PLAN_INVALID`, `MOVEMENT_INVALID`,
+        `INVALID_REFERENCE`, `BUSINESS_RULE`
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code: { type: string, example: NOT_FOUND }
+            message: { type: string, example: Cuenta no encontrada }
+            details: { type: object, additionalProperties: true }
+
+    Id:
+      type: string
+      pattern: '^[1-9]\d{0,17}$'
+      example: '1'
+    Fecha:
+      type: string
+      format: date
+      example: '2026-10-20'
+    Importe:
+      type: string
+      pattern: '^\d{1,14}(\.\d{1,2})?$'
+      example: '1250.50'
+    Rol:
+      type: string
+      enum: [administrador, gestor]
+    EstadoPlan:
+      type: string
+      enum: [al_corriente, atrasado, cubierto]
+
+    Pagina:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+
+    NeonUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        emailVerified: { type: boolean }
+
+    UsuarioRef:
+      type: object
+      nullable: true
+      properties:
+        id: { type: string, format: uuid }
+        nombre: { type: string, nullable: true }
+        email: { type: string, format: email }
+
+    Me:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        rol: { $ref: '#/components/schemas/Rol' }
+        activo: { type: boolean }
+        nombre: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        facial:
+          type: object
+          properties:
+            inscrito: { type: boolean }
+            verificado: { type: boolean, description: 'Por ahora siempre true (bloque D pendiente)' }
+
+    CrearDeudor:
+      type: object
+      required: [nombre, scoreBuro]
+      description: Se requiere `curp` o `rfc` (se convierten a mayúsculas).
+      properties:
+        nombre: { type: string, maxLength: 200 }
+        curp: { type: string, nullable: true, pattern: '^[A-Z0-9]{18}$' }
+        rfc: { type: string, nullable: true, pattern: '^[A-Z&Ñ0-9]{12,13}$' }
+        telefono: { type: string, nullable: true, maxLength: 20 }
+        ciudad: { type: string, nullable: true, maxLength: 100 }
+        segmento: { type: string, nullable: true, maxLength: 50 }
+        scoreBuro: { type: integer, minimum: 0, maximum: 1000 }
+    ActualizarDeudor:
+      type: object
+      minProperties: 1
+      properties:
+        nombre: { type: string, maxLength: 200 }
+        curp: { type: string, nullable: true }
+        rfc: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        ciudad: { type: string, nullable: true }
+        segmento: { type: string, nullable: true }
+        scoreBuro: { type: integer, minimum: 0, maximum: 1000 }
+    Deudor:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        nombre: { type: string }
+        curp: { type: string, nullable: true }
+        rfc: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        ciudad: { type: string, nullable: true }
+        segmento: { type: string, nullable: true }
+        scoreBuro: { type: integer }
+    DeudorListado:
+      allOf:
+        - $ref: '#/components/schemas/Deudor'
+        - type: object
+          properties:
+            numeroCuentas: { type: integer }
+    DeudorDetalle:
+      allOf:
+        - $ref: '#/components/schemas/Deudor'
+        - type: object
+          properties:
+            cuentas:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { $ref: '#/components/schemas/Id' }
+                  referenciaExterna: { type: string, nullable: true }
+                  producto: { type: string, nullable: true }
+                  montoInicial: { $ref: '#/components/schemas/Importe' }
+                  moneda: { type: string }
+                  saldo: { $ref: '#/components/schemas/Importe' }
+                  estadoPlan: { $ref: '#/components/schemas/EstadoPlan' }
+                  cuentaLiquidada: { type: boolean }
+                  diasMora: { type: integer }
+
+    Cuenta:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        referenciaExterna: { type: string, nullable: true }
+        producto: { type: string, nullable: true }
+        montoInicial: { $ref: '#/components/schemas/Importe' }
+        moneda: { type: string, example: MXN }
+        fechaOriginacion: { type: string, format: date, nullable: true }
+        deudor:
+          type: object
+          properties:
+            id: { $ref: '#/components/schemas/Id' }
+            nombre: { type: string }
+        responsable: { $ref: '#/components/schemas/UsuarioRef' }
+        saldo: { $ref: '#/components/schemas/Importe' }
+        montoExigible: { $ref: '#/components/schemas/Importe' }
+        montoVencido: { $ref: '#/components/schemas/Importe' }
+        estadoPlan: { $ref: '#/components/schemas/EstadoPlan' }
+        cuentaLiquidada: { type: boolean }
+        diasMora: { type: integer }
+        prioridad: { type: number, format: double, minimum: 0, maximum: 100 }
+    CuentaDetalle:
+      allOf:
+        - $ref: '#/components/schemas/Cuenta'
+        - type: object
+          properties:
+            deudor:
+              type: object
+              properties:
+                id: { $ref: '#/components/schemas/Id' }
+                nombre: { type: string }
+                curp: { type: string, nullable: true }
+                rfc: { type: string, nullable: true }
+                telefono: { type: string, nullable: true }
+                ciudad: { type: string, nullable: true }
+                scoreBuro: { type: integer }
+            totalPagado: { $ref: '#/components/schemas/Importe' }
+            plan:
+              type: object
+              nullable: true
+              properties:
+                fechaAcuerdo: { $ref: '#/components/schemas/Fecha' }
+                cuotas:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      numero: { type: integer }
+                      fechaVencimiento: { $ref: '#/components/schemas/Fecha' }
+                      monto: { $ref: '#/components/schemas/Importe' }
+                      montoCubierto: { $ref: '#/components/schemas/Importe' }
+                      estado:
+                        type: string
+                        enum: [pagada, vencida, parcial, pendiente]
+    CrearCuenta:
+      type: object
+      required: [deudorId, montoInicial, plan]
+      properties:
+        deudorId: { $ref: '#/components/schemas/Id' }
+        referenciaExterna: { type: string, maxLength: 60 }
+        producto: { type: string, maxLength: 100 }
+        montoInicial: { $ref: '#/components/schemas/Importe' }
+        moneda: { type: string, pattern: '^[A-Z]{3}$', default: MXN }
+        fechaOriginacion: { $ref: '#/components/schemas/Fecha' }
+        responsableId: { type: string, format: uuid }
+        plan:
+          type: object
+          required: [fechaAcuerdo, cuotas]
+          properties:
+            fechaAcuerdo: { $ref: '#/components/schemas/Fecha' }
+            cuotas:
+              type: array
+              minItems: 1
+              maxItems: 360
+              items:
+                type: object
+                required: [numero, fechaVencimiento, monto]
+                properties:
+                  numero: { type: integer, minimum: 1 }
+                  fechaVencimiento: { $ref: '#/components/schemas/Fecha' }
+                  monto: { $ref: '#/components/schemas/Importe' }
+    Asignacion:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        realizadaEn: { type: string, format: date-time }
+        responsableAnterior: { $ref: '#/components/schemas/UsuarioRef' }
+        responsableNuevo: { $ref: '#/components/schemas/UsuarioRef' }
+        realizadaPor: { $ref: '#/components/schemas/UsuarioRef' }
+
+    CrearPago:
+      type: object
+      required: [fechaPago, monto]
+      properties:
+        fechaPago: { $ref: '#/components/schemas/Fecha' }
+        monto: { $ref: '#/components/schemas/Importe' }
+    Pago:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        cuentaId: { $ref: '#/components/schemas/Id' }
+        fechaPago: { $ref: '#/components/schemas/Fecha' }
+        monto: { $ref: '#/components/schemas/Importe' }
+        registradoPor: { $ref: '#/components/schemas/UsuarioRef' }
+        registradoEn: { type: string, format: date-time }
+        montoRevertido:
+          type: string
+          description: Suma de reembolsos/reversiones ligados a este pago
+          example: '0.00'
+    PagoCreado:
+      allOf:
+        - $ref: '#/components/schemas/Pago'
+        - type: object
+          properties:
+            saldoCuenta: { type: string, example: '2500.00' }
+
+    CrearMovimiento:
+      type: object
+      required: [tipo, monto, fechaEfectiva, motivo]
+      properties:
+        tipo:
+          type: string
+          enum: [interes, recargo, reembolso, reversion_pago, ajuste_cargo, descuento, condonacion, ajuste_abono]
+        monto: { $ref: '#/components/schemas/Importe' }
+        fechaEfectiva: { $ref: '#/components/schemas/Fecha' }
+        motivo: { type: string, maxLength: 500 }
+        pagoOrigenId: { $ref: '#/components/schemas/Id' }
+    Movimiento:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        cuentaId: { $ref: '#/components/schemas/Id' }
+        tipo: { type: string }
+        impactoSaldo:
+          type: string
+          description: Positivo para cargos, negativo para abonos
+          example: '-200.00'
+        fechaEfectiva: { $ref: '#/components/schemas/Fecha' }
+        motivo: { type: string }
+        pagoOrigenId: { type: string, nullable: true }
+        registradoPor: { $ref: '#/components/schemas/UsuarioRef' }
+        registradoEn: { type: string, format: date-time }
+    MovimientoCreado:
+      allOf:
+        - $ref: '#/components/schemas/Movimiento'
+        - type: object
+          properties:
+            saldoCuenta: { type: string, example: '3150.00' }
+
+    PanelResumen:
+      type: object
+      properties:
+        fechaCorte: { $ref: '#/components/schemas/Fecha' }
+        desde: { $ref: '#/components/schemas/Fecha' }
+        hasta: { $ref: '#/components/schemas/Fecha' }
+        totales:
+          type: object
+          properties:
+            cuentas: { type: integer }
+            alCorriente: { type: integer }
+            atrasadas: { type: integer }
+            cubiertas: { type: integer }
+            liquidadas: { type: integer }
+            sinAsignar: { type: integer, description: Solo administrador }
+            saldoTotal: { $ref: '#/components/schemas/Importe' }
+            montoExigible: { $ref: '#/components/schemas/Importe' }
+            montoVencido: { $ref: '#/components/schemas/Importe' }
+            indiceMorosidad: { type: number, description: '% de cuentas atrasadas', example: 57.1 }
+        distribucionPlan:
+          type: array
+          items:
+            type: object
+            properties:
+              estadoPlan: { $ref: '#/components/schemas/EstadoPlan' }
+              cuentas: { type: integer }
+        morosidad:
+          type: array
+          description: Cuentas no liquidadas por rango de días de mora
+          items:
+            type: object
+            properties:
+              rango: { type: string, enum: [sin_mora, '1-30', '31-60', '61-90', '90+'] }
+              cuentas: { type: integer }
+              montoVencido: { $ref: '#/components/schemas/Importe' }
+        pagosPorPeriodo:
+          type: array
+          items:
+            type: object
+            properties:
+              periodo: { type: string, example: '2026-10' }
+              monto: { $ref: '#/components/schemas/Importe' }
+              pagos: { type: integer }
+              esperado: { $ref: '#/components/schemas/Importe' }
+        proximosVencimientos:
+          type: array
+          items:
+            type: object
+            properties:
+              cuentaId: { $ref: '#/components/schemas/Id' }
+              referenciaExterna: { type: string, nullable: true }
+              deudor: { type: string }
+              numero: { type: integer }
+              fechaVencimiento: { $ref: '#/components/schemas/Fecha' }
+              montoPendiente: { $ref: '#/components/schemas/Importe' }
+
+    Prioridad:
+      type: object
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        referenciaExterna: { type: string, nullable: true }
+        deudor:
+          type: object
+          properties:
+            id: { $ref: '#/components/schemas/Id' }
+            nombre: { type: string }
+        responsable: { $ref: '#/components/schemas/UsuarioRef' }
+        estadoPlan: { $ref: '#/components/schemas/EstadoPlan' }
+        montoExigible: { $ref: '#/components/schemas/Importe' }
+        montoVencido: { $ref: '#/components/schemas/Importe' }
+        saldo: { $ref: '#/components/schemas/Importe' }
+        diasMora: { type: integer }
+        prioridad: { type: number, format: double }
+        componentes:
+          type: object
+          properties:
+            proporcionVencida: { type: number, description: 'min(vencido/exigible, 1)' }
+            factorMora: { type: number, description: 'min(díasMora/30, 1)' }
+
+    Usuario:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nombre: { type: string, nullable: true }
+        email: { type: string, format: email }
+        rol: { $ref: '#/components/schemas/Rol' }
+        activo: { type: boolean }
+        cuentasAsignadas: { type: integer }
