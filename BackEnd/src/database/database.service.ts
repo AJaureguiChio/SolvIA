@@ -1,7 +1,11 @@
 import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 import type { PoolClient } from 'pg';
+
+// Las fechas de negocio (DATE) se entregan tal cual, 'YYYY-MM-DD', sin
+// convertirlas a Date con la zona horaria del proceso.
+types.setTypeParser(types.builtins.DATE, (valor) => valor);
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {

@@ -1,13 +1,13 @@
 import {
   CanActivate,
   ExecutionContext,
-  ForbiddenException,
+  HttpStatus,
   Injectable,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { ApiError } from '../../../common/api-error.js';
 import { DatabaseService } from '../../../database/database.service.js';
 
 export type UsuarioActual = {
@@ -45,7 +45,11 @@ export class NeonAuthGuard implements CanActivate {
     )?.[1];
 
     if (!token) {
-      throw new UnauthorizedException('Falta el token de Neon Auth');
+      throw new ApiError(
+        HttpStatus.UNAUTHORIZED,
+        'UNAUTHENTICATED',
+        'Falta el token de Neon Auth',
+      );
     }
 
     let usuarioId: string;
@@ -65,7 +69,11 @@ export class NeonAuthGuard implements CanActivate {
 
       usuarioId = payload.sub;
     } catch {
-      throw new UnauthorizedException('Token inválido o vencido');
+      throw new ApiError(
+        HttpStatus.UNAUTHORIZED,
+        'UNAUTHENTICATED',
+        'Token inválido o vencido',
+      );
     }
 
     const resultado = await this.database.query(
@@ -78,11 +86,19 @@ export class NeonAuthGuard implements CanActivate {
     const perfil = resultado.rows[0] as UsuarioActual | undefined;
 
     if (!perfil) {
-      throw new ForbiddenException('El usuario no tiene perfil en SolvIA');
+      throw new ApiError(
+        HttpStatus.FORBIDDEN,
+        'PROFILE_REQUIRED',
+        'El usuario no tiene perfil en SolvIA',
+      );
     }
 
     if (!perfil.activo) {
-      throw new ForbiddenException('El usuario está desactivado');
+      throw new ApiError(
+        HttpStatus.FORBIDDEN,
+        'PROFILE_INACTIVE',
+        'El usuario está desactivado',
+      );
     }
 
     request.usuarioActual = perfil;
