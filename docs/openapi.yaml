@@ -1,15 +1,15 @@
 openapi: 3.0.3
 info:
-  title: SolvIA API
+  title: SolvIA · API
   version: 1.0.0
   description: |
     API de SolvIA (NestJS) para el seguimiento de planes de pago de deudores ficticios.
 
-    **Flujo para probar en Apidog**
-    1. `POST /sign-in/email` (Neon Auth) con el correo y contraseña del usuario. Apidog guarda la cookie de sesión.
-    2. `GET /get-session` (Neon Auth): copia el header de respuesta `set-auth-jwt` en la variable de entorno `token`
-       (o usa el post-procesador "Extraer variable" → Header `set-auth-jwt`). Alternativa: `GET /token` devuelve `{ "token": "..." }`.
-    3. Llama a la API de SolvIA con `Authorization: Bearer {{token}}`. El JWT de Neon Auth caduca en ~15 min.
+    Las rutas de Neon Auth (registro, inicio de sesión y JWT) están en el módulo aparte `docs/openapi-neon-auth.yaml`.
+    En Apidog, importa cada archivo en su propio módulo: cada uno tiene su servidor.
+
+    **Autenticación:** obtén el JWT con `sign-in/email` + `get-session` en el módulo de Neon Auth, guárdalo en la variable
+    `token` y llama a esta API con `Authorization: Bearer {{token}}`. El JWT caduca en ~15 min.
 
     **Convenciones:** JSON en camelCase; IDs `bigint` como cadena (`"12"`); importes como cadena con 2 decimales (`"1250.50"`);
     fechas `YYYY-MM-DD`; listas paginadas con `page`/`pageSize` → `{ items, total, page, pageSize }`.
@@ -24,8 +24,6 @@ servers:
   - url: http://localhost:3000/api/v1
     description: Backend local (NestJS)
 tags:
-  - name: Neon Auth
-    description: Rutas propias de Neon Auth (Better Auth). Se llaman directamente al servicio de Neon, no al backend.
   - name: Sesión
   - name: Deudores
   - name: Cuentas
@@ -38,155 +36,6 @@ security:
   - bearerAuth: []
 
 paths:
-  # ---------------------------------------------------------------- Neon Auth
-  /sign-in/email:
-    servers: &neonAuth
-      - url: '{neonAuthUrl}'
-        description: Neon Auth de la rama desarrollo (valor de NEON_AUTH_BASE_URL)
-        variables:
-          neonAuthUrl:
-            default: https://ep-XXXX.neonauth.REGION.aws.neon.tech/neondb/auth
-            description: Copia aquí NEON_AUTH_BASE_URL (sin barra final). No lo subas al repositorio.
-    post:
-      tags: [Neon Auth]
-      summary: Iniciar sesión con correo y contraseña
-      description: |
-        Crea una sesión en Neon Auth y devuelve la cookie de sesión (`Set-Cookie`).
-        Neon Auth exige un header `Origin` que esté entre los dominios de confianza (p. ej. `http://localhost:5173`).
-      operationId: neonSignIn
-      security: []
-      parameters:
-        - $ref: '#/components/parameters/Origin'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [email, password]
-              properties:
-                email: { type: string, format: email }
-                password: { type: string, format: password }
-                rememberMe: { type: boolean, default: true }
-            example:
-              email: gestor1@solvia.demo
-              password: '********'
-      responses:
-        '200':
-          description: Sesión creada. La cookie de sesión llega en `Set-Cookie`.
-          headers:
-            Set-Cookie:
-              schema: { type: string }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  redirect: { type: boolean }
-                  token: { type: string, description: Token de sesión (no es el JWT) }
-                  user: { $ref: '#/components/schemas/NeonUser' }
-        '401':
-          description: Credenciales inválidas
-        '403':
-          description: Origin no permitido
-
-  /get-session:
-    servers: *neonAuth
-    get:
-      tags: [Neon Auth]
-      summary: Obtener la sesión actual y el JWT
-      description: |
-        Requiere la cookie de sesión de `/sign-in/email`. El JWT para la API de SolvIA viene
-        en el header de respuesta **`set-auth-jwt`**; guárdalo en la variable `token`.
-      operationId: neonGetSession
-      security: []
-      parameters:
-        - $ref: '#/components/parameters/Origin'
-      responses:
-        '200':
-          description: Sesión vigente (o `null` si no hay sesión)
-          headers:
-            set-auth-jwt:
-              description: JWT (EdDSA) firmado por Neon Auth; `sub` = ID del usuario
-              schema: { type: string }
-          content:
-            application/json:
-              schema:
-                nullable: true
-                type: object
-                properties:
-                  session:
-                    type: object
-                    properties:
-                      id: { type: string }
-                      userId: { type: string, format: uuid }
-                      expiresAt: { type: string, format: date-time }
-                  user: { $ref: '#/components/schemas/NeonUser' }
-
-  /token:
-    servers: *neonAuth
-    get:
-      tags: [Neon Auth]
-      summary: Obtener el JWT en el cuerpo (alternativa a get-session)
-      operationId: neonToken
-      security: []
-      parameters:
-        - $ref: '#/components/parameters/Origin'
-      responses:
-        '200':
-          description: JWT de la sesión actual
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  token: { type: string }
-        '401':
-          description: Sin sesión
-
-  /sign-out:
-    servers: *neonAuth
-    post:
-      tags: [Neon Auth]
-      summary: Cerrar sesión
-      operationId: neonSignOut
-      security: []
-      parameters:
-        - $ref: '#/components/parameters/Origin'
-      requestBody:
-        content:
-          application/json:
-            schema: { type: object }
-            example: {}
-      responses:
-        '200':
-          description: Sesión cerrada
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success: { type: boolean }
-
-  /jwks:
-    servers: *neonAuth
-    get:
-      tags: [Neon Auth]
-      summary: Claves públicas para verificar el JWT (las usa el backend)
-      operationId: neonJwks
-      security: []
-      responses:
-        '200':
-          description: JSON Web Key Set
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  keys:
-                    type: array
-                    items: { type: object }
-
   # ------------------------------------------------------------------- Sesión
   /me:
     get:
@@ -752,15 +601,9 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT de Neon Auth (header `set-auth-jwt` de `/get-session`).
+      description: JWT de Neon Auth (header `set-auth-jwt` de `GET /get-session`, módulo `openapi-neon-auth.yaml`).
 
   parameters:
-    Origin:
-      name: Origin
-      in: header
-      required: true
-      description: Debe ser un dominio de confianza de Neon Auth
-      schema: { type: string, default: 'http://localhost:5173' }
     IdPath:
       name: id
       in: path
@@ -858,14 +701,6 @@ components:
         total: { type: integer }
         page: { type: integer }
         pageSize: { type: integer }
-
-    NeonUser:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        email: { type: string, format: email }
-        name: { type: string }
-        emailVerified: { type: boolean }
 
     UsuarioRef:
       type: object

@@ -1,6 +1,6 @@
 # Progreso de SolvIA
 
-Última actualización: 2026-10-20. Demo: viernes 23 de octubre de 2026.
+Última actualización: 2026-10-26. Demo: viernes 23 de octubre de 2026.
 
 Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) microservicio facial y flujo completo · E) dashboard con Recharts · F) reporte ejecutivo (solo si hay tiempo).
 
@@ -28,17 +28,19 @@ Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) mi
   - Endpoints: ver `docs/openapi.yaml`.
   - El panel ya calcula los datos del bloque E: `/panel/resumen` (totales, morosidad por rangos, pagos por mes frente a lo esperado, próximos vencimientos) y `/panel/prioridades` (ranking por P con sus componentes).
 - `src/database/database.service.ts`: las fechas se leen como texto y la zona horaria se fija en la conexión.
-- `docs/openapi.yaml`: OpenAPI 3.0.3 de los 19 endpoints de la API y de las rutas de Neon Auth (sign-in, get-session, token, sign-out, jwks), para importar en Apidog.
+- OpenAPI 3.0.3 en dos módulos para Apidog (cada uno con su servidor):
+  - `docs/openapi.yaml`: los 19 endpoints de la API de SolvIA.
+  - `docs/openapi-neon-auth.yaml`: rutas de Neon Auth (sign-up, sign-in, get-session, token, sign-out, jwks).
 
 ### Bloques C, D, E y F
 - Sin empezar.
 
 ## En curso
-- **Pruebas en Apidog.** La especificación está lista, pero ningún endpoint se ha llamado todavía por HTTP con un JWT real de Neon Auth.
-- **Contraseñas de los gestores.** Los dos gestores demo existen en Neon Auth pero no tienen contraseña, así que no pueden iniciar sesión. Por ahora solo se puede probar como administrador.
+- **Usuario temporal** `prueba.registro@solvia.demo` (rama `desarrollo`, sin perfil), creado al probar `sign-up`. Se puede borrar.
+- **Pendiente de la lista del 20 de octubre:** crear una cuenta y asignarla como administrador por HTTP.
 
 ## Pendiente (prioridad para la demo)
-1. Dar contraseña a gestor1 y gestor2 (rama `desarrollo`) y probar en Apidog `/me` y un recorrido por rol: listar cuentas, ver un detalle y registrar un pago como gestor; crear una cuenta y asignarla como administrador.
+1. Probar por HTTP la creación y asignación de una cuenta como administrador.
 2. **Bloque C (frontend):**
    - React Router, login con Neon Auth (`@neondatabase/neon-js` o llamadas a Better Auth) y cliente HTTP con `Authorization: Bearer`.
    - Rutas protegidas y layout por rol.
@@ -111,7 +113,13 @@ npm run dev                  # http://localhost:5173
   - El gestor 1 recibe 404 al pedir una cuenta del gestor 2.
   - El panel del gestor 1 muestra 7 cuentas y un índice de morosidad de 57.1.
 - **OpenAPI:** `npx @redocly/cli lint docs/openapi.yaml` da la especificación por válida, con 12 advertencias de estilo (licencia, descripción de tags, servidor localhost y respuestas 4xx en las rutas de Neon).
-- **No verificado:** llamadas HTTP reales con JWT y tests unitarios (por decisión, el bloque B se hizo sin tests).
+- **Recorrido HTTP con JWT real (26 de octubre, rama `desarrollo`):**
+  - `sign-up`: 200; correo repetido, 422; contraseña corta, 400. `sign-in`, `get-session` y `token`: 200.
+  - `/me`: sin token, 401; usuario sin perfil, 403 `PROFILE_REQUIRED`; administrador, gestor1 y gestor2, 200 con su rol.
+  - `/cuentas?orden=prioridad`: 14 cuentas para el administrador, 7 para gestor1 y 6 para gestor2, ordenadas por P.
+  - `/cuentas/3` (de gestor1): 200 para el administrador y gestor1, 404 para gestor2.
+  - `POST /cuentas/3/pagos`: gestor2, 404; administrador, 403; monto mayor al saldo, 422 `SALDO_INSUFICIENTE`; fecha futura, 422 `FECHA_FUERA_DE_RANGO`; gestor1, 201 (pago 29 de 100.00, saldo de 5000.00 a 4900.00).
+- **No verificado:** tests unitarios (por decisión, el bloque B se hizo sin tests) y crear y asignar una cuenta por HTTP.
 
 ## Decisiones y desvíos
 - **`/me` usa `Authorization: Bearer`** en lugar de la cookie de Neon Auth: esa cookie es del dominio de Neon y el navegador no la envía al backend. `NeonSessionService` quedó en el código pero ya no se usa.
@@ -126,7 +134,14 @@ npm run dev                  # http://localhost:5173
 
 ## Problemas conocidos
 - **La rama por defecto del proyecto Neon es `production`.** Cualquier herramienta sin rama explícita apunta ahí; conviene cambiar la rama por defecto o pasar siempre la de `desarrollo`.
-- **Los gestores demo no tienen contraseña** y no pueden iniciar sesión.
+- **Contraseñas demo.** En `desarrollo`, `albertojairzinho@hotmail.com`, gestor1, gestor2, `admin@solvia.com` y el usuario temporal comparten la misma contraseña (no está en el repositorio). La cuenta `credential` del administrador se creó el 26 de octubre.
+- **Apidog y Neon Auth:**
+  - Sin header `Origin`, Neon responde 403 `MISSING_OR_NULL_ORIGIN`; hay que ponerlo en el módulo de Neon Auth (`http://localhost:5173`).
+  - El JWT es el header `set-auth-jwt` de `get-session`. Si la cookie de sesión está vacía, no hay JWT válido y `/me` falla.
+  - Probado por el usuario el 26 de octubre: los endpoints responden con el token guardado en una variable.
+- **"Hoy" es en America/Mexico_City.** Después de las 18:00 en México ya es el día siguiente en UTC: un pago con la fecha UTC da 422 `FECHA_FUERA_DE_RANGO`. El frontend debe calcular la fecha por omisión con `timeZone: 'America/Mexico_City'`.
+- **El aviso `SECURITY WARNING` de `pg`** sobre `sslmode` es inofensivo; desaparece usando `sslmode=verify-full` en el `.env`.
+- **Códigos de error de Better Auth:** el correo duplicado da 422 `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL` y la contraseña corta 400 `PASSWORD_TOO_SHORT`, con formato `{ code, message }`.
 - **Tests:**
   - 2 de 22 fallan desde antes de estos cambios: a los specs de `DatabaseService` y `NeonAuthGuard` les falta `ConfigService`.
   - Los specs nuevos generados por Nest (p. ej. `pagos.*.spec.ts`) no proveen `DatabaseService`.
@@ -135,11 +150,4 @@ npm run dev                  # http://localhost:5173
 - **Variables AWS:** existen en `.env` pero el código no las usa.
 
 ## Siguiente paso
-Dar contraseña a `gestor1@solvia.demo` y `gestor2@solvia.demo` en Neon Auth (rama `desarrollo`). Después, levantar el backend (`cd BackEnd && npm run start:dev`) y probar en Apidog con `docs/openapi.yaml`:
-1. `sign-in` y `get-session` para obtener el JWT.
-2. `GET /me` como administrador y como gestor.
-3. `GET /cuentas?orden=prioridad`.
-4. `GET /cuentas/{id}`.
-5. `POST /cuentas/{id}/pagos` como gestor asignado y como gestor ajeno (debe dar 404).
-
-Corregir lo que falle y empezar el bloque C (frontend).
+Empezar el bloque C (frontend): React Router, login con Neon Auth, cliente HTTP con `Authorization: Bearer` y las pantallas de deudores, cuentas, detalle con cuotas y registro de pago según `docs/SolvIA_wireframes.html`.

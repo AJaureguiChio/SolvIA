@@ -1,0 +1,276 @@
+openapi: 3.0.3
+info:
+  title: SolvIA · Neon Auth
+  version: 1.0.0
+  description: |
+    Rutas de Neon Auth (Managed Better Auth) que usa SolvIA. Se llaman directamente al servicio de Neon,
+    no al backend. La API de negocio está en el módulo aparte `docs/openapi.yaml`.
+
+    **Flujo para probar en Apidog**
+    1. `POST /sign-up/email` solo si el usuario todavía no existe. Registrarse crea la identidad en Neon Auth,
+       pero no el perfil de SolvIA: hasta que un administrador inserte su fila en `perfiles_usuario`
+       (rol y estado), `GET /me` responde 403 `PROFILE_REQUIRED`.
+    2. `POST /sign-in/email` con el correo y la contraseña. Apidog guarda la cookie de sesión.
+    3. `GET /get-session`: copia el header de respuesta `set-auth-jwt` en la variable de entorno `token`
+       (o usa el post-procesador "Extraer variable" → Header `set-auth-jwt`). Alternativa: `GET /token` devuelve `{ "token": "..." }`.
+    4. En el módulo de la API, llama con `Authorization: Bearer {{token}}`. El JWT caduca en ~15 min.
+
+    Todas las rutas exigen un header `Origin` de confianza; los puertos de `localhost` están permitidos.
+
+    **Errores:** Better Auth responde `{ "code", "message" }`, distinto del formato de la API de SolvIA.
+servers:
+  - url: '{neonAuthUrl}'
+    description: Neon Auth de la rama desarrollo (valor de NEON_AUTH_BASE_URL)
+    variables:
+      neonAuthUrl:
+        default: https://ep-XXXX.neonauth.REGION.aws.neon.tech/neondb/auth
+        description: Copia aquí NEON_AUTH_BASE_URL (sin barra final). No lo subas al repositorio.
+tags:
+  - name: Registro
+    description: Alta de identidades en Neon Auth
+  - name: Sesión
+    description: Inicio y cierre de sesión, y obtención del JWT para la API
+  - name: Claves
+    description: Claves públicas con las que el backend verifica el JWT
+
+# Sin Bearer: la sesión viaja en la cookie que devuelve sign-in/sign-up.
+security: []
+
+paths:
+  /sign-up/email:
+    post:
+      tags: [Registro]
+      summary: Registrar un usuario con correo y contraseña
+      description: |
+        Crea el usuario en `neon_auth.user` y su cuenta `credential` con la contraseña cifrada. En la rama `desarrollo`
+        el registro está abierto y no exige verificar el correo, así que la respuesta ya trae una sesión (`Set-Cookie`).
+
+        El usuario nuevo no tiene rol en SolvIA. Para que pueda usar la API, un administrador debe crear su perfil:
+        `INSERT INTO perfiles_usuario (id, rol) VALUES ('<user.id>', 'gestor');`
+      operationId: neonSignUp
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, description: Nombre que se muestra en SolvIA }
+                email: { type: string, format: email }
+                password: { type: string, format: password, minLength: 8, maxLength: 128 }
+                image: { type: string, format: uri, nullable: true }
+                callbackURL:
+                  type: string
+                  description: Destino tras verificar el correo; debe ser un dominio de confianza
+                rememberMe: { type: boolean, default: true }
+            example:
+              name: Gestor de prueba
+              email: gestor3@solvia.demo
+              password: '********'
+      responses:
+        '200':
+          description: Usuario creado. Si no se exige verificación, la sesión llega en `Set-Cookie`.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    nullable: true
+                    description: Token de sesión (no es el JWT); `null` si hay que verificar el correo
+                  user: { $ref: '#/components/schemas/NeonUser' }
+        '400':
+          description: Datos inválidos, p. ej. contraseña corta (`PASSWORD_TOO_SHORT`) o correo mal formado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NeonError' }
+        '403': { $ref: '#/components/responses/OrigenNoPermitido' }
+        '422':
+          description: El correo ya está registrado (`USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NeonError' }
+              example:
+                code: USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL
+                message: User already exists. Use another email.
+
+  /sign-in/email:
+    post:
+      tags: [Sesión]
+      summary: Iniciar sesión con correo y contraseña
+      description: Crea una sesión en Neon Auth y devuelve la cookie de sesión (`Set-Cookie`).
+      operationId: neonSignIn
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+                rememberMe: { type: boolean, default: true }
+            example:
+              email: gestor1@solvia.demo
+              password: '********'
+      responses:
+        '200':
+          description: Sesión creada. La cookie de sesión llega en `Set-Cookie`.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirect: { type: boolean }
+                  token: { type: string, description: Token de sesión (no es el JWT) }
+                  user: { $ref: '#/components/schemas/NeonUser' }
+        '401':
+          description: Credenciales inválidas (`INVALID_EMAIL_OR_PASSWORD`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NeonError' }
+        '403': { $ref: '#/components/responses/OrigenNoPermitido' }
+
+  /get-session:
+    get:
+      tags: [Sesión]
+      summary: Obtener la sesión actual y el JWT
+      description: |
+        Requiere la cookie de sesión de `/sign-in/email` o `/sign-up/email`. El JWT para la API de SolvIA viene
+        en el header de respuesta **`set-auth-jwt`**; guárdalo en la variable `token`.
+      operationId: neonGetSession
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: Sesión vigente (o `null` si no hay sesión)
+          headers:
+            set-auth-jwt:
+              description: JWT (EdDSA) firmado por Neon Auth; `sub` = ID del usuario
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                nullable: true
+                type: object
+                properties:
+                  session:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      userId: { type: string, format: uuid }
+                      expiresAt: { type: string, format: date-time }
+                  user: { $ref: '#/components/schemas/NeonUser' }
+        '403': { $ref: '#/components/responses/OrigenNoPermitido' }
+
+  /token:
+    get:
+      tags: [Sesión]
+      summary: Obtener el JWT en el cuerpo (alternativa a get-session)
+      operationId: neonToken
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: JWT de la sesión actual
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+        '401':
+          description: Sin sesión
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NeonError' }
+
+  /sign-out:
+    post:
+      tags: [Sesión]
+      summary: Cerrar sesión
+      description: Cierra la sesión del navegador; un JWT ya emitido sigue siendo válido hasta que caduca.
+      operationId: neonSignOut
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+            example: {}
+      responses:
+        '200':
+          description: Sesión cerrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+        '403': { $ref: '#/components/responses/OrigenNoPermitido' }
+
+  /jwks:
+    get:
+      tags: [Claves]
+      summary: Claves públicas para verificar el JWT (las usa el backend)
+      operationId: neonJwks
+      responses:
+        '200':
+          description: JSON Web Key Set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items: { type: object }
+
+components:
+  parameters:
+    Origin:
+      name: Origin
+      in: header
+      required: true
+      description: Debe ser un dominio de confianza de Neon Auth. Sin él, Neon responde 403 `MISSING_OR_NULL_ORIGIN`.
+      # Apidog rellena el valor con `example`, no con `default`.
+      example: 'http://localhost:5173'
+      schema: { type: string, default: 'http://localhost:5173', example: 'http://localhost:5173' }
+
+  responses:
+    OrigenNoPermitido:
+      description: El header `Origin` falta (`MISSING_OR_NULL_ORIGIN`) o no es de confianza (`INVALID_ORIGIN`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/NeonError' }
+
+  schemas:
+    NeonError:
+      type: object
+      properties:
+        code: { type: string, example: INVALID_EMAIL_OR_PASSWORD }
+        message: { type: string, example: Invalid email or password }
+
+    NeonUser:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        emailVerified: { type: boolean }
+        image: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
