@@ -32,20 +32,35 @@ Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) mi
   - `docs/openapi.yaml`: los 19 endpoints de la API de SolvIA.
   - `docs/openapi-neon-auth.yaml`: rutas de Neon Auth (sign-up, sign-in, get-session, token, sign-out, jwks).
 
-### Bloques C, D, E y F
+### Bloque C — Frontend (React 19 + Vite, primera parte; en commit, sin probar en navegador)
+- Dependencias: `react-router` 8 (modo declarativo) y `@neondatabase/auth` (cliente de Neon Auth).
+- `src/lib/auth.js`: cliente de Neon Auth; el JWT sale de `getSession()` (`session.token`, que el SDK toma del header `set-auth-jwt` y guarda en caché hasta poco antes de caducar).
+- `src/lib/api.js`: `fetch` con `Authorization: Bearer` y errores del contrato (`ApiError` con `status`, `code` y `details`).
+- `src/sesion/SesionContext.jsx`: estados `cargando`, `anonimo`, `listo`, `sin_perfil`, `inactivo` y `error`, a partir de `getSession()` y `GET /me`.
+- `src/App.jsx`: rutas protegidas y por rol (`/deudores/nuevo` solo administrador, `/cuentas/:id/pago` solo gestor).
+- Pantallas según los wireframes, con estados de carga, vacío y error:
+  - Login (1), con avisos para usuario sin perfil o desactivado.
+  - Panel (4 y 5): indicadores, pagos por mes frente a lo esperado, próximos vencimientos y prioridades. Las gráficas quedan para el bloque E.
+  - Deudores (6) y ficha (7): búsqueda y paginación; el administrador registra y edita.
+  - Cuentas (8): filtros por texto, cumplimiento y gestor (administrador) u orden (gestor).
+  - Detalle de cuenta (10): resumen y pestañas de plan y cuotas, pagos, movimientos y asignaciones; el administrador reasigna gestor.
+  - Registro de pago (11): validación previa y paso de confirmación.
+- `src/index.css` toma los estilos de `docs/SolvIA_wireframes.html`. Se borraron los archivos de la plantilla de Vite.
+- `vite.config.js` lee el `.env` de la raíz (`envDir: '..'`) y fija el puerto 5173.
+
+### Bloques D, E y F
 - Sin empezar.
 
 ## En curso
-- **Usuario temporal** `prueba.registro@solvia.demo` (rama `desarrollo`, sin perfil), creado al probar `sign-up`. Se puede borrar.
+- **Usuario temporal** `prueba.registro@solvia.demo` (rama `desarrollo`, sin perfil), creado al probar `sign-up`. **No borrarlo:** el usuario pidió conservarlo; sirve para probar el aviso de usuario sin perfil.
+- **Datos modificados por las pruebas:** el pago 29 (100.00, gestor1) quedó en la cuenta 3 (saldo 4900.00). `npm run db:seed -- --reset` lo elimina si se quiere volver al estado sembrado.
 - **Pendiente de la lista del 20 de octubre:** crear una cuenta y asignarla como administrador por HTTP.
 
 ## Pendiente (prioridad para la demo)
 1. Probar por HTTP la creación y asignación de una cuenta como administrador.
-2. **Bloque C (frontend):**
-   - React Router, login con Neon Auth (`@neondatabase/neon-js` o llamadas a Better Auth) y cliente HTTP con `Authorization: Bearer`.
-   - Rutas protegidas y layout por rol.
-   - Pantallas según `docs/SolvIA_wireframes.html`: deudores, cuentas, detalle de cuenta con cuotas y registro de pago.
-   - Variable `FRONTEND_ORIGIN` en el backend si el puerto no es 5173.
+2. **Bloque C (frontend), resto:**
+   - Probar en el navegador el recorrido por rol.
+   - Pantallas de administrador: registro de cuenta y plan (9), movimiento de saldo (12) y gestión de usuarios (13).
 3. **Bloque E (dashboard):** Recharts sobre `/panel/resumen` y `/panel/prioridades`, y la lista de cuentas con `orden=prioridad`. El backend ya está listo.
 4. **Bloque D (facial):**
    - Microservicio FastAPI en `Services/ai-service` con `/health`, `/enroll` y `/verify` (MTCNN + Inception-ResNet-v1 VGGFace2, umbral 0.40).
@@ -66,6 +81,8 @@ Todas las variables van en el `.env` de la raíz del repositorio, que no se vers
 | `NEON_AUTH_BASE_URL` | URL de Neon Auth (emisor del JWT) |
 | `NEON_AUTH_JWKS_URL` | JWKS para verificar el JWT |
 | `FRONTEND_ORIGIN` | Orígenes de CORS separados por comas; por defecto `http://localhost:5173` |
+| `VITE_NEON_AUTH_URL` | URL de Neon Auth para el navegador; en el `.env` vale `${NEON_AUTH_BASE_URL}` |
+| `VITE_API_URL` | URL de la API para el navegador; por defecto `http://localhost:3000/api/v1` |
 | `PORT` | Opcional, por defecto 3000 |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Aún no se usan en el código |
 
@@ -83,7 +100,7 @@ npm run db:seed -- --reset   # vacía las tablas de negocio y vuelve a sembrar
 npm run start:dev            # http://localhost:3000/api/v1
 npm run build && npm run lint
 
-# Frontend (todavía es la plantilla de Vite)
+# Frontend
 cd ../FrontEnd
 npm install
 npm run dev                  # http://localhost:5173
@@ -119,6 +136,11 @@ npm run dev                  # http://localhost:5173
   - `/cuentas?orden=prioridad`: 14 cuentas para el administrador, 7 para gestor1 y 6 para gestor2, ordenadas por P.
   - `/cuentas/3` (de gestor1): 200 para el administrador y gestor1, 404 para gestor2.
   - `POST /cuentas/3/pagos`: gestor2, 404; administrador, 403; monto mayor al saldo, 422 `SALDO_INSUFICIENTE`; fecha futura, 422 `FECHA_FUERA_DE_RANGO`; gestor1, 201 (pago 29 de 100.00, saldo de 5000.00 a 4900.00).
+- **Frontend (26 de octubre):**
+  - `npm run lint` sin errores; `npm run build` correcto.
+  - El bundle apunta a Neon Auth de `desarrollo` y no contiene secretos.
+  - CORS con credenciales desde `localhost:5173`: el preflight de Neon Auth y el del backend responden 204. La cookie de sesión de Neon es `SameSite=None; Partitioned`.
+  - No se ha probado en un navegador.
 - **No verificado:** tests unitarios (por decisión, el bloque B se hizo sin tests) y crear y asignar una cuenta por HTTP.
 
 ## Decisiones y desvíos
@@ -150,4 +172,16 @@ npm run dev                  # http://localhost:5173
 - **Variables AWS:** existen en `.env` pero el código no las usa.
 
 ## Siguiente paso
-Empezar el bloque C (frontend): React Router, login con Neon Auth, cliente HTTP con `Authorization: Bearer` y las pantallas de deudores, cuentas, detalle con cuotas y registro de pago según `docs/SolvIA_wireframes.html`.
+
+**Al retomar la sesión (27 de octubre en adelante):**
+- El último commit contiene todo lo descrito arriba; `git status` debería estar limpio salvo `.env`.
+- El usuario suele tener su propio backend en el puerto 3000. Si `npm run start:dev` da `EADDRINUSE`, comprobar quién ocupa el puerto antes de detener nada y no matar procesos del usuario.
+- La contraseña demo común no está en el repositorio: pedirla al usuario si hace falta probar por HTTP.
+- Neon: proyecto `aged-paper-03532903`, rama `desarrollo` = `br-bold-dust-b4aymjsk`. La rama por defecto es `production` (`br-soft-frost-b4rpx0vq`): pasar siempre la rama de forma explícita.
+
+Probar el frontend en el navegador (`cd FrontEnd && npm run dev`, con el backend levantado):
+1. Iniciar sesión como gestor1: panel, mis cuentas, detalle de una cuenta y registrar un pago.
+2. Iniciar sesión como administrador: panel con "Por asignar", filtro por gestor, alta y edición de un deudor y reasignación de una cuenta.
+3. Iniciar sesión con `prueba.registro@solvia.demo`: debe mostrar el aviso de usuario sin perfil.
+
+Corregir lo que falle y seguir con las pantallas 9, 12 y 13; después, el bloque E (Recharts).
