@@ -4,8 +4,8 @@ import { useSesion } from '../sesion/SesionContext.jsx';
 
 const MENSAJES = {
   INVALID_EMAIL_OR_PASSWORD: 'Correo o contraseña incorrectos.',
-  MISSING_OR_NULL_ORIGIN: 'Neon Auth rechazó el origen de la aplicación.',
-  INVALID_ORIGIN: 'Este dominio no está entre los dominios de confianza de Neon Auth.',
+  MISSING_OR_NULL_ORIGIN: 'La base de datos rechazó el origen de la aplicación.',
+  INVALID_ORIGIN: 'Este dominio no está entre los dominios de confianza de la base de datos.',
 };
 
 export default function Login() {
@@ -47,7 +47,7 @@ export default function Login() {
           <>
             <div className="notice error" role="alert">
               {estado === 'sin_perfil'
-                ? 'Tu cuenta existe en Neon Auth, pero aún no tiene un perfil en SolvIA. Pide a un administrador que te asigne un rol.'
+                ? 'Tu cuenta existe en la base de datos, pero aún no tiene un perfil en SolvIA. Pide a un administrador que te asigne un rol.'
                 : 'Tu usuario está desactivado. Contacta a un administrador.'}
             </div>
             <button type="button" className="btn" onClick={cerrarSesion}>
