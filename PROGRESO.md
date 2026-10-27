@@ -1,6 +1,6 @@
 # Progreso de SolvIA
 
-Última actualización: 2026-10-26. Demo: viernes 23 de octubre de 2026.
+Última actualización: 2026-10-27. Entrega: viernes 30 de octubre de 2026 (antes era el 23).
 
 Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) microservicio facial y flujo completo · E) dashboard con Recharts · F) reporte ejecutivo (solo si hay tiempo).
 
@@ -32,7 +32,7 @@ Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) mi
   - `docs/openapi.yaml`: los 19 endpoints de la API de SolvIA.
   - `docs/openapi-neon-auth.yaml`: rutas de Neon Auth (sign-up, sign-in, get-session, token, sign-out, jwks).
 
-### Bloque C — Frontend (React 19 + Vite, primera parte; en commit, sin probar en navegador)
+### Bloque C — Frontend (React 19 + Vite, primera parte; probada en navegador el 27 de octubre)
 - Dependencias: `react-router` 8 (modo declarativo) y `@neondatabase/auth` (cliente de Neon Auth).
 - `src/lib/auth.js`: cliente de Neon Auth; el JWT sale de `getSession()` (`session.token`, que el SDK toma del header `set-auth-jwt` y guarda en caché hasta poco antes de caducar).
 - `src/lib/api.js`: `fetch` con `Authorization: Bearer` y errores del contrato (`ApiError` con `status`, `code` y `details`).
@@ -47,19 +47,22 @@ Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) mi
   - Registro de pago (11): validación previa y paso de confirmación.
 - `src/index.css` toma los estilos de `docs/SolvIA_wireframes.html`. Se borraron los archivos de la plantilla de Vite.
 - `vite.config.js` lee el `.env` de la raíz (`envDir: '..'`) y fija el puerto 5173.
+- `ErrorFormulario` (`comunes.jsx`) ya no muestra el nombre técnico de la restricción: un CURP, RFC o referencia externa repetidos dan un mensaje legible.
 
 ### Bloques D, E y F
 - Sin empezar.
 
 ## En curso
 - **Usuario temporal** `prueba.registro@solvia.demo` (rama `desarrollo`, sin perfil), creado al probar `sign-up`. **No borrarlo:** el usuario pidió conservarlo; sirve para probar el aviso de usuario sin perfil.
-- **Datos modificados por las pruebas:** el pago 29 (100.00, gestor1) quedó en la cuenta 3 (saldo 4900.00). `npm run db:seed -- --reset` lo elimina si se quiere volver al estado sembrado.
-- **Pendiente de la lista del 20 de octubre:** crear una cuenta y asignarla como administrador por HTTP.
+- **Datos modificados por las pruebas** (rama `desarrollo`; `npm run db:seed -- --reset` los elimina):
+  - Cuenta 3 (SOL-003): pagos 29 (100.00, 26 oct) y de 50.00 (27 oct) de gestor1; saldo 4,850.00.
+  - SOL-009 (sin gestor en el seed) quedó asignada a gestor1; el 27 de octubre se reasignó a gestor2 y de vuelta a gestor1 desde la interfaz.
+  - Deudor 13 "Deudor Prueba Navegador" (RFC `DPN261027AB1`, Tlaxcala) y su cuenta 15, SOL-015 (3,000.00 en 3 cuotas), asignada a gestor2.
+  - El seed no conoce el deudor 13 ni la cuenta 15: `--reset` los borra porque vacía las tablas de negocio.
 
 ## Pendiente (prioridad para la demo)
-1. Probar por HTTP la creación y asignación de una cuenta como administrador.
+1. **Decidir el índice de morosidad del panel** (ver "Problemas conocidos"). Recomendación: calcularlo sobre las cuentas vigentes. El usuario lo dejó pendiente el 27 de octubre; no cambiarlo sin su visto bueno.
 2. **Bloque C (frontend), resto:**
-   - Probar en el navegador el recorrido por rol.
    - Pantallas de administrador: registro de cuenta y plan (9), movimiento de saldo (12) y gestión de usuarios (13).
 3. **Bloque E (dashboard):** Recharts sobre `/panel/resumen` y `/panel/prioridades`, y la lista de cuentas con `orden=prioridad`. El backend ya está listo.
 4. **Bloque D (facial):**
@@ -140,8 +143,12 @@ npm run dev                  # http://localhost:5173
   - `npm run lint` sin errores; `npm run build` correcto.
   - El bundle apunta a Neon Auth de `desarrollo` y no contiene secretos.
   - CORS con credenciales desde `localhost:5173`: el preflight de Neon Auth y el del backend responden 204. La cookie de sesión de Neon es `SameSite=None; Partitioned`.
-  - No se ha probado en un navegador.
-- **No verificado:** tests unitarios (por decisión, el bloque B se hizo sin tests) y crear y asignar una cuenta por HTTP.
+- **Navegador (27 de octubre):** Chrome headless con `playwright-core` (scripts en el scratchpad de la sesión, fuera del repo), contra el backend y el Vite del usuario. Sin errores de consola salvo los 4xx esperados.
+  - gestor1: panel, mis cuentas, detalle de SOL-003, deudores (solo los suyos) y "Sin permiso" en `/deudores/nuevo`. Pago de 50.00 en SOL-003: monto mayor al saldo bloqueado, fecha por omisión 27/10 (México), paso de confirmación, 201 y saldo de 4,900.00 a 4,850.00.
+  - Administrador: panel con "Por asignar", cartera con columna de gestor, ficha de deudor y "Sin permiso" en `/cuentas/3/pago`. Alta del deudor 13 (201), edición (200), RFC repetido (409, ya con mensaje legible), reasignación de SOL-009 (200 dos veces) y pestaña Asignaciones con el historial.
+  - `prueba.registro@solvia.demo`: aviso de usuario sin perfil y botón "Usar otra cuenta".
+- **Crear y asignar una cuenta por HTTP (27 de octubre):** cuotas que no suman, 422 `PLAN_INVALID`; gestor, 403; administrador, 201 (SOL-015, sin gestor, al corriente, saldo 3000.00); referencia repetida, 409 `DUPLICATE_IDENTIFIER`; aparece en `sinAsignar=true`; asignación a gestor2, 200; UUID inexistente, 422 `INVALID_ASSIGNMENT`; gestor2 la ve (200) y gestor1 no (404); el historial registra el cambio.
+- **No verificado:** tests unitarios (por decisión, el bloque B se hizo sin tests).
 
 ## Decisiones y desvíos
 - **`/me` usa `Authorization: Bearer`** en lugar de la cookie de Neon Auth: esa cookie es del dominio de Neon y el navegador no la envía al backend. `NeonSessionService` quedó en el código pero ya no se usa.
@@ -155,6 +162,8 @@ npm run dev                  # http://localhost:5173
 - **Seed:** `--reset` es opt-in y nunca toca `perfiles_usuario` ni `neon_auth`.
 
 ## Problemas conocidos
+- **El panel mezcla denominadores:** "Al corriente" se calcula sobre las cuentas vigentes (sin liquidar), pero `indiceMorosidad` (`panel.service.ts`) divide las atrasadas entre todas las cuentas, liquidadas incluidas. Con los datos actuales, el administrador ve 7 atrasadas y 50 %, cuando sobre 12 vigentes serían 58.3 %. Falta decidir la definición antes de las gráficas.
+- **Carga lenta en recargas completas:** al abrir una URL directamente, la pantalla tarda de 3 a 5 s (`getSession`, luego `/me`, luego los datos). Navegando dentro de la app es rápido.
 - **La rama por defecto del proyecto Neon es `production`.** Cualquier herramienta sin rama explícita apunta ahí; conviene cambiar la rama por defecto o pasar siempre la de `desarrollo`.
 - **Contraseñas demo.** En `desarrollo`, `albertojairzinho@hotmail.com`, gestor1, gestor2, `admin@solvia.com` y el usuario temporal comparten la misma contraseña (no está en el repositorio). La cuenta `credential` del administrador se creó el 26 de octubre.
 - **Apidog y Neon Auth:**
@@ -173,15 +182,15 @@ npm run dev                  # http://localhost:5173
 
 ## Siguiente paso
 
-**Al retomar la sesión (27 de octubre en adelante):**
-- El último commit contiene todo lo descrito arriba; `git status` debería estar limpio salvo `.env`.
-- El usuario suele tener su propio backend en el puerto 3000. Si `npm run start:dev` da `EADDRINUSE`, comprobar quién ocupa el puerto antes de detener nada y no matar procesos del usuario.
+**Al retomar la sesión (28 de octubre en adelante; entrega el 30):**
+- **Sin commit:** la sesión del 27 de octubre dejó cambios en `FrontEnd/src/components/comunes.jsx` y en este archivo. Revisar `git status` y preguntar al usuario si los commitea antes de seguir.
+- El usuario suele tener corriendo su backend (puerto 3000, `dist/main`) y su Vite (5173). No detenerlos; un cambio en el backend requiere que el usuario lo reinicie.
 - La contraseña demo común no está en el repositorio: pedirla al usuario si hace falta probar por HTTP.
 - Neon: proyecto `aged-paper-03532903`, rama `desarrollo` = `br-bold-dust-b4aymjsk`. La rama por defecto es `production` (`br-soft-frost-b4rpx0vq`): pasar siempre la rama de forma explícita.
+- Para probar en el navegador sin intervención: `playwright-core` con el Chrome instalado (`C:/Program Files/Google/Chrome/Application/chrome.exe`), instalado en el scratchpad. En Git Bash, usar `MSYS_NO_PATHCONV=1` al pasar rutas como `/cuentas`.
 
-Probar el frontend en el navegador (`cd FrontEnd && npm run dev`, con el backend levantado):
-1. Iniciar sesión como gestor1: panel, mis cuentas, detalle de una cuenta y registrar un pago.
-2. Iniciar sesión como administrador: panel con "Por asignar", filtro por gestor, alta y edición de un deudor y reasignación de una cuenta.
-3. Iniciar sesión con `prueba.registro@solvia.demo`: debe mostrar el aviso de usuario sin perfil.
-
-Corregir lo que falle y seguir con las pantallas 9, 12 y 13; después, el bloque E (Recharts).
+Orden propuesto:
+1. Decidir con el usuario el índice de morosidad (pendiente).
+2. Pantallas de administrador 9 (registro de cuenta y plan), 12 (movimiento de saldo) y 13 (gestión de usuarios).
+3. Bloque E (Recharts).
+4. Bloque D (facial), si da tiempo antes del 30.

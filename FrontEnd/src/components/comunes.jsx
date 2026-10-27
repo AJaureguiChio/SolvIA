@@ -87,13 +87,22 @@ export function Paginacion({ page, pageSize, total, onCambiar }) {
   );
 }
 
+// Restricciones UNIQUE de la base que llegan en details.constraint con DUPLICATE_IDENTIFIER.
+const DUPLICADOS = {
+  deudores_curp_key: 'Ya existe un deudor con ese CURP.',
+  deudores_rfc_key: 'Ya existe un deudor con ese RFC.',
+  cuentas_referencia_externa_key: 'Ya existe una cuenta con esa referencia externa.',
+};
+
 // Muestra los errores por campo de INVALID_INPUT o el mensaje general.
+// El nombre técnico de la restricción (details.constraint) no se muestra.
 export function ErrorFormulario({ error }) {
   if (!error) return null;
-  const campos = Object.entries(error.details ?? {});
+  const { constraint, ...resto } = error.details ?? {};
+  const campos = Object.entries(resto);
   return (
     <div className="notice error" role="alert">
-      {error.message}
+      {(error.code === 'DUPLICATE_IDENTIFIER' && DUPLICADOS[constraint]) || error.message}
       {campos.length > 0 && (
         <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
           {campos.map(([campo, mensajes]) => (
