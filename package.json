@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "dev:backend": "npm --prefix BackEnd run start:dev",
+    "dev:frontend": "npm --prefix FrontEnd run dev",
+    "dev:ai-service": "Services\\ai-service\\venv\\Scripts\\python -m uvicorn main:app --app-dir Services/ai-service --host 127.0.0.1 --port 8000"
+  },
   "dependencies": {
     "@neon/config": "^1.7.3",
     "@neon/env": "^1.4.4"

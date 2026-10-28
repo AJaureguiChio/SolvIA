@@ -126,6 +126,16 @@ Todas las variables van en el `.env` de la raíz del repositorio, que no se vers
 | `FACE_THRESHOLD`, `FACE_MIN_SIZE` | Opcionales del microservicio (0.60 y 80 px) |
 | `FACE_COOKIE_SECURE` | Opcional; `true` para `SameSite=None; Secure` con dominios distintos |
 
+Desde la raíz del repositorio, cada módulo arranca con su script (en consolas separadas):
+
+```bash
+npm run dev:backend      # NestJS en modo watch, puerto 3000
+npm run dev:frontend     # Vite, puerto 5173 (otro puerto: npm run dev:frontend -- -- --port 5199)
+npm run dev:ai-service   # microservicio facial, puerto 8000 (requiere el venv instalado)
+```
+
+Instalación y comandos por módulo:
+
 ```bash
 # Base de datos (rama desarrollo)
 cd BackEnd
