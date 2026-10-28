@@ -6,6 +6,7 @@ import Cuentas from './pages/Cuentas.jsx';
 import Deudor from './pages/Deudor.jsx';
 import Deudores from './pages/Deudores.jsx';
 import Login from './pages/Login.jsx';
+import NuevaCuenta from './pages/NuevaCuenta.jsx';
 import Panel from './pages/Panel.jsx';
 import RegistrarPago from './pages/RegistrarPago.jsx';
 import { SesionProvider, useSesion } from './sesion/SesionContext.jsx';
@@ -69,6 +70,14 @@ export default function App() {
             />
             <Route path="deudores/:id" element={<Deudor />} />
             <Route path="cuentas" element={<Cuentas />} />
+            <Route
+              path="cuentas/nueva"
+              element={
+                <Protegida roles={['administrador']}>
+                  <NuevaCuenta />
+                </Protegida>
+              }
+            />
             <Route path="cuentas/:id" element={<Cuenta />} />
             <Route
               path="cuentas/:id/pago"

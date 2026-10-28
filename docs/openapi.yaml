@@ -952,7 +952,7 @@ components:
             saldoTotal: { $ref: '#/components/schemas/Importe' }
             montoExigible: { $ref: '#/components/schemas/Importe' }
             montoVencido: { $ref: '#/components/schemas/Importe' }
-            indiceMorosidad: { type: number, description: '% de cuentas atrasadas', example: 57.1 }
+            indiceMorosidad: { type: number, description: '% de cuentas atrasadas sobre las vigentes (sin liquidar)', example: 66.7 }
         distribucionPlan:
           type: array
           items:

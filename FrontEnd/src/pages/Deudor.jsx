@@ -158,6 +158,14 @@ function FichaDeudor({ deudor, volver }) {
                 </table>
               </div>
             )}
+            {esAdmin && (
+              <>
+                <div className="spacer" />
+                <Link to={`/cuentas/nueva?deudor=${actual.id}`} className="btn">
+                  Crear cuenta y plan
+                </Link>
+              </>
+            )}
           </div>
         )}
       </div>

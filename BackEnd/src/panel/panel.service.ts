@@ -69,9 +69,11 @@ export class PanelService {
                     AS "montoExigible",
                 ${importe('COALESCE(sum(e.monto_vencido), 0)')}
                     AS "montoVencido",
+                -- Sobre las cuentas vigentes (sin liquidar), igual que "al corriente".
                 COALESCE(round(100.0
                     * count(*) FILTER (WHERE e.estado_plan = 'atrasado')
-                    / NULLIF(count(*), 0), 1), 0)::float8 AS "indiceMorosidad"
+                    / NULLIF(count(*) FILTER (WHERE NOT e.cuenta_liquidada), 0),
+                    1), 0)::float8 AS "indiceMorosidad"
            ${CUENTAS_VISIBLES}`,
         periodo,
       ),

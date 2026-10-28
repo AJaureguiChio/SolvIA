@@ -1,8 +1,10 @@
 # Progreso de SolvIA
 
-Última actualización: 2026-10-27. Entrega: viernes 30 de octubre de 2026 (antes era el 23).
+Última actualización: 2026-10-27. Entrega: viernes 30 de octubre de 2026 (antes era el 23). **La verificación facial (bloque D) es requisito de la entrega final.**
 
-Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) microservicio facial y flujo completo · E) dashboard con Recharts · F) reporte ejecutivo (solo si hay tiempo).
+Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) microservicio facial y flujo completo (obligatorio) · E) dashboard con Recharts · F) reporte ejecutivo (solo si hay tiempo).
+
+La verificación facial es obligatoria en la entrega como funcionalidad del sistema. Para cada usuario sigue siendo un paso adicional opcional, que se exige solo si inscribió su rostro (AGENTS.md y wireframes).
 
 ## Hecho
 
@@ -47,6 +49,13 @@ Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) mi
   - Registro de pago (11): validación previa y paso de confirmación.
 - `src/index.css` toma los estilos de `docs/SolvIA_wireframes.html`. Se borraron los archivos de la plantilla de Vite.
 - `vite.config.js` lee el `.env` de la raíz (`envDir: '..'`) y fija el puerto 5173.
+- Pantalla 9, `src/pages/NuevaCuenta.jsx` (`/cuentas/nueva`, solo administrador):
+  - Pasos 1 (cuenta), 2 (cuotas) y 3 (revisar y confirmar).
+  - Deudor con búsqueda; se preselecciona con `?deudor=ID`. Gestor opcional.
+  - Generador de cuotas mensuales: reparte el monto y los centavos sobrantes van a la última cuota; si el día no existe en el mes, se usa el último.
+  - Tabla de cuotas editable (añadir y quitar).
+  - Valida antes de enviar las mismas reglas que los triggers: suma exacta en centavos, acuerdo no anterior a la originación, vencimientos no anteriores al acuerdo y estrictamente crecientes.
+  - Se llega desde "Crear cuenta y plan" en la cartera y en la ficha del deudor. Los estilos `.steps` vienen del wireframe.
 - `ErrorFormulario` (`comunes.jsx`) ya no muestra el nombre técnico de la restricción: un CURP, RFC o referencia externa repetidos dan un mensaje legible.
 
 ### Bloques D, E y F
@@ -57,15 +66,14 @@ Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) mi
 - **Datos modificados por las pruebas** (rama `desarrollo`; `npm run db:seed -- --reset` los elimina):
   - Cuenta 3 (SOL-003): pagos 29 (100.00, 26 oct) y de 50.00 (27 oct) de gestor1; saldo 4,850.00.
   - SOL-009 (sin gestor en el seed) quedó asignada a gestor1; el 27 de octubre se reasignó a gestor2 y de vuelta a gestor1 desde la interfaz.
-  - Deudor 13 "Deudor Prueba Navegador" (RFC `DPN261027AB1`, Tlaxcala) y su cuenta 15, SOL-015 (3,000.00 en 3 cuotas), asignada a gestor2.
+  - Deudor 13 "Deudor Prueba Navegador" (RFC `DPN261027AB1`, Tlaxcala) con dos cuentas: la 15, SOL-015 (3,000.00 en 3 cuotas, de gestor2), y la 17, SOL-016 (2,500.50 en 3 cuotas de 833.50, de gestor1, creada desde la pantalla 9). El id 16 se consumió en un intento que dio 409.
   - El seed no conoce el deudor 13 ni la cuenta 15: `--reset` los borra porque vacía las tablas de negocio.
 
 ## Pendiente (prioridad para la demo)
-1. **Decidir el índice de morosidad del panel** (ver "Problemas conocidos"). Recomendación: calcularlo sobre las cuentas vigentes. El usuario lo dejó pendiente el 27 de octubre; no cambiarlo sin su visto bueno.
-2. **Bloque C (frontend), resto:**
-   - Pantallas de administrador: registro de cuenta y plan (9), movimiento de saldo (12) y gestión de usuarios (13).
+1. **Bloque D (facial), obligatorio** (detalle abajo).
+2. **Bloque C (frontend), resto:** pantallas de administrador 12 (movimiento de saldo) y 13 (gestión de usuarios).
 3. **Bloque E (dashboard):** Recharts sobre `/panel/resumen` y `/panel/prioridades`, y la lista de cuentas con `orden=prioridad`. El backend ya está listo.
-4. **Bloque D (facial):**
+4. **Bloque D (facial, obligatorio para la entrega):**
    - Microservicio FastAPI en `Services/ai-service` con `/health`, `/enroll` y `/verify` (MTCNN + Inception-ResNet-v1 VGGFace2, umbral 0.40).
    - En NestJS: `POST /facial/inscripciones` y `POST /facial/verificaciones` (multipart, campo `captura`), cifrado de la galería, cookie `solvia_face` (JWT HS256 de 30 min), `FaceVerifiedGuard` real, `cookie-parser` y bloqueo 429 tras 5 fallos en 15 min.
    - En el frontend: `/configuracion-facial` y `/verifica-rostro`.
@@ -148,6 +156,14 @@ npm run dev                  # http://localhost:5173
   - Administrador: panel con "Por asignar", cartera con columna de gestor, ficha de deudor y "Sin permiso" en `/cuentas/3/pago`. Alta del deudor 13 (201), edición (200), RFC repetido (409, ya con mensaje legible), reasignación de SOL-009 (200 dos veces) y pestaña Asignaciones con el historial.
   - `prueba.registro@solvia.demo`: aviso de usuario sin perfil y botón "Usar otra cuenta".
 - **Crear y asignar una cuenta por HTTP (27 de octubre):** cuotas que no suman, 422 `PLAN_INVALID`; gestor, 403; administrador, 201 (SOL-015, sin gestor, al corriente, saldo 3000.00); referencia repetida, 409 `DUPLICATE_IDENTIFIER`; aparece en `sinAsignar=true`; asignación a gestor2, 200; UUID inexistente, 422 `INVALID_ASSIGNMENT`; gestor2 la ve (200) y gestor1 no (404); el historial registra el cambio.
+- **Morosidad (27 de octubre, noche):** el panel del administrador muestra 7 atrasadas, "Morosidad 53.8 %" (7 de 13 vigentes) y "Al corriente 38 %" (5 de 13), con denominadores ya coherentes. El backend del usuario está en modo watch y recompiló solo.
+- **Pantalla 9 en el navegador:**
+  - Desde la ficha del deudor 13, el deudor sale preseleccionado.
+  - Un acuerdo anterior a la originación se bloquea.
+  - El generador produjo 30 nov, 30 dic y 30 ene con 833.50 cada una. Al cambiar una cuota a 800.00, aparece el aviso de descuadre y el botón se desactiva.
+  - La revisión y la confirmación dieron 201 y redirigen al detalle con el aviso. Una referencia repetida da 409, con el mensaje legible.
+  - gestor1 ve "Sin permiso" en `/cuentas/nueva`, no ve el botón y sí ve SOL-016 en sus cuentas.
+  - `npm run lint` y `npm run build` del frontend, sin errores.
 - **No verificado:** tests unitarios (por decisión, el bloque B se hizo sin tests).
 
 ## Decisiones y desvíos
@@ -159,10 +175,10 @@ npm run dev                  # http://localhost:5173
 - **Prioridad P** se calcula en SQL. Solo `/panel/prioridades` filtra P > 0; `/cuentas?orden=prioridad` muestra todas.
 - **`pagosPorPeriodo`** cuenta los pagos brutos, incluido uno que después se revirtió (SOL-008). Pasar a monto neto es un cambio pequeño si se prefiere.
 - **Queda fuera por ahora:** `POST /usuarios` (depende de las invitaciones de Neon Auth) y los reportes (bloque F).
+- **Índice de morosidad** (27 de octubre): cuentas atrasadas entre cuentas vigentes (sin liquidar), igual que "Al corriente". Antes dividía entre todas las cuentas. Cambiado en `panel.service.ts` y en `docs/openapi.yaml`.
 - **Seed:** `--reset` es opt-in y nunca toca `perfiles_usuario` ni `neon_auth`.
 
 ## Problemas conocidos
-- **El panel mezcla denominadores:** "Al corriente" se calcula sobre las cuentas vigentes (sin liquidar), pero `indiceMorosidad` (`panel.service.ts`) divide las atrasadas entre todas las cuentas, liquidadas incluidas. Con los datos actuales, el administrador ve 7 atrasadas y 50 %, cuando sobre 12 vigentes serían 58.3 %. Falta decidir la definición antes de las gráficas.
 - **Carga lenta en recargas completas:** al abrir una URL directamente, la pantalla tarda de 3 a 5 s (`getSession`, luego `/me`, luego los datos). Navegando dentro de la app es rápido.
 - **La rama por defecto del proyecto Neon es `production`.** Cualquier herramienta sin rama explícita apunta ahí; conviene cambiar la rama por defecto o pasar siempre la de `desarrollo`.
 - **Contraseñas demo.** En `desarrollo`, `albertojairzinho@hotmail.com`, gestor1, gestor2, `admin@solvia.com` y el usuario temporal comparten la misma contraseña (no está en el repositorio). La cuenta `credential` del administrador se creó el 26 de octubre.
@@ -183,14 +199,13 @@ npm run dev                  # http://localhost:5173
 ## Siguiente paso
 
 **Al retomar la sesión (28 de octubre en adelante; entrega el 30):**
-- **Sin commit:** la sesión del 27 de octubre dejó cambios en `FrontEnd/src/components/comunes.jsx` y en este archivo. Revisar `git status` y preguntar al usuario si los commitea antes de seguir.
+- `git status` debería estar limpio salvo `.env`.
 - El usuario suele tener corriendo su backend (puerto 3000, `dist/main`) y su Vite (5173). No detenerlos; un cambio en el backend requiere que el usuario lo reinicie.
 - La contraseña demo común no está en el repositorio: pedirla al usuario si hace falta probar por HTTP.
 - Neon: proyecto `aged-paper-03532903`, rama `desarrollo` = `br-bold-dust-b4aymjsk`. La rama por defecto es `production` (`br-soft-frost-b4rpx0vq`): pasar siempre la rama de forma explícita.
 - Para probar en el navegador sin intervención: `playwright-core` con el Chrome instalado (`C:/Program Files/Google/Chrome/Application/chrome.exe`), instalado en el scratchpad. En Git Bash, usar `MSYS_NO_PATHCONV=1` al pasar rutas como `/cuentas`.
 
-Orden propuesto:
-1. Decidir con el usuario el índice de morosidad (pendiente).
-2. Pantallas de administrador 9 (registro de cuenta y plan), 12 (movimiento de saldo) y 13 (gestión de usuarios).
+Orden propuesto (la entrega es el 30 de octubre y la verificación facial es obligatoria):
+1. Bloque D (facial): microservicio, endpoints en NestJS, `FaceVerifiedGuard` real y pantallas `/configuracion-facial` y `/verifica-rostro`. Antes, recrear el venv con Python 3.11 o 3.12.
+2. Pantallas 12 (movimiento de saldo) y 13 (gestión de usuarios).
 3. Bloque E (Recharts).
-4. Bloque D (facial), si da tiempo antes del 30.

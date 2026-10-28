@@ -52,7 +52,13 @@ export default function Cuentas() {
       <Titulo
         titulo={esAdmin ? 'Cartera de cuentas' : 'Mis cuentas'}
         subtitulo={esAdmin ? 'Todas las cuentas, con o sin responsable.' : 'Únicamente las cuentas que tengo asignadas.'}
-      />
+      >
+        {esAdmin && (
+          <Link to="/cuentas/nueva" className="btn primary">
+            Crear cuenta y plan
+          </Link>
+        )}
+      </Titulo>
 
       <form
         className="filters"

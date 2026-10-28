@@ -78,6 +78,9 @@ label.field .input { margin-top: 5px; font-weight: 400; }
 .form-grid .wide { grid-column: 1 / -1; }
 .filters { display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 10px; margin-bottom: 14px; align-items: end; }
 .filters label.field { margin: 0; }
+.steps { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; margin-bottom: 18px; }
+.steps span { border: 1px solid var(--line); background: #f5f7f8; padding: 7px 9px; border-radius: 3px; }
+.steps span.active { border-color: #6d8492; background: #dde6eb; font-weight: 700; }
 
 .tablewrap { overflow: auto; border: 1px solid var(--line); border-radius: 5px; background: #fff; }
 table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 500px; }
