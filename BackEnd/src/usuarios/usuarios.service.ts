@@ -10,7 +10,9 @@ import type {
 const SELECT_USUARIO = `
   SELECT p.id::text AS id, u.name AS nombre, u.email, p.rol, p.activo,
          (SELECT count(*)::int FROM public.cuentas c
-           WHERE c.responsable_id = p.id) AS "cuentasAsignadas"
+           WHERE c.responsable_id = p.id) AS "cuentasAsignadas",
+         EXISTS (SELECT 1 FROM public.facial_plantillas f
+                  WHERE f.usuario_id = p.id) AS "facialInscrito"
     FROM public.perfiles_usuario p
     JOIN neon_auth."user" u ON u.id = p.id`;
 

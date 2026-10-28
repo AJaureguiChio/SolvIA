@@ -1,6 +1,6 @@
 # Progreso de SolvIA
 
-Última actualización: 2026-10-27. Entrega: viernes 30 de octubre de 2026 (antes era el 23). **La verificación facial (bloque D) es requisito de la entrega final.**
+Última actualización: 2026-10-28. Entrega: viernes 30 de octubre de 2026 (antes era el 23). **La verificación facial (bloque D) es requisito de la entrega final.**
 
 Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) microservicio facial y flujo completo (obligatorio) · E) dashboard con Recharts · F) reporte ejecutivo (solo si hay tiempo).
 
@@ -58,7 +58,32 @@ La verificación facial es obligatoria en la entrega como funcionalidad del sist
   - Se llega desde "Crear cuenta y plan" en la cartera y en la ficha del deudor. Los estilos `.steps` vienen del wireframe.
 - `ErrorFormulario` (`comunes.jsx`) ya no muestra el nombre técnico de la restricción: un CURP, RFC o referencia externa repetidos dan un mensaje legible.
 
-### Bloques D, E y F
+### Bloque D — Verificación facial obligatoria (28 de octubre)
+Política decidida por el usuario: **obligatoria para todos**. Tras Neon Auth, quien no tiene rostro lo registra (excepción de primer acceso) y quien lo tiene lo verifica. Sin prueba facial vigente, las rutas de negocio dan 401 `FACE_VERIFICATION_REQUIRED`.
+- **Microservicio** `Services/ai-service/main.py` (FastAPI, puerto 8000):
+  - MTCNN detecta el rostro e Inception-ResNet-v1 (VGGFace2, facenet-pytorch) extrae un embedding normalizado de 512 dimensiones.
+  - `GET /health`, `POST /enroll` (captura → embedding) y `POST /verify` (captura + galería → `coincide`, `score`). Las dos últimas exigen `X-Internal-Key`.
+  - Rechaza capturas sin rostro, con varios rostros, con un rostro de menos de 80 px y de más de 5 MB.
+  - Umbral de similitud coseno 0.60 (`FACE_THRESHOLD`). No guarda nada y lee el `.env` de la raíz.
+  - Dependencias en `requirements.txt`.
+- **Backend:**
+  - `src/auth/prueba-facial.ts`: cookie httpOnly `solvia_face` (JWT HS256 de 30 min, `sub` = usuario, `SameSite=Lax`, `Path=/api/v1`; `FACE_COOKIE_SECURE=true` la cambia a `None` + `Secure`).
+  - `FaceVerifiedGuard` real: exige la cookie del mismo usuario del JWT. `/me` devuelve `facial.verificado` real.
+  - `src/facial/`:
+    - `POST /facial/inscripciones` acepta de 1 a 5 capturas. Reemplazar un rostro ya registrado exige prueba vigente (403 `FACE_REENROLL_FORBIDDEN`).
+    - `POST /facial/verificaciones`: el score nunca se devuelve. Responde 401 `FACE_MISMATCH` con `intentosRestantes`, 429 `FACE_LOCKED` tras 5 fallos en 15 min (el contador se reinicia con un acierto o un registro), 409 `FACE_NOT_ENROLLED`, 422 `FACE_CAPTURE_INVALID` con `motivo` y 503 `FACE_SERVICE_UNAVAILABLE`.
+    - `DELETE /facial/verificacion` borra la cookie.
+    - Galería: k vectores float32 cifrados con AES-256-GCM (`FACE_GALLERY_KEY`). Cada intento queda en `facial_intentos`.
+  - `POST /usuarios/{id}/restablecimiento-facial` (administrador): borra la plantilla. `GET /usuarios` incluye `facialInscrito`.
+  - Sin `cookie-parser`: la cookie se lee del header.
+- **Frontend:**
+  - `components/Camara.jsx` (getUserMedia, captura JPEG en memoria) y `components/RegistroRostro.jsx` (3 capturas).
+  - Pantallas `/registro-facial` (primer acceso), `/verifica-rostro` (pantalla 2) y `/configuracion-facial` (pantalla 3, enlace "Mi rostro" en la cabecera, para registrar de nuevo).
+  - Sesión con estados `requiere_inscripcion` y `requiere_verificacion`; si la prueba caduca a mitad de uso, `api.js` vuelve a pedirla. Al cerrar sesión se borra la cookie.
+- `.env`: se agregaron `AI_SERVICE_URL`, `AI_INTERNAL_KEY`, `FACE_GALLERY_KEY` (32 bytes en base64) y `FACE_JWT_SECRET`, generados al azar. Si se pierde `FACE_GALLERY_KEY`, las galerías no se pueden descifrar y hay que registrar de nuevo.
+- `docs/openapi.yaml`: rutas faciales, restablecimiento y respuestas `CapturaInvalida` y `ServicioFacialCaido` (válido con Redocly). `AGENTS.md`: la verificación facial ya es obligatoria.
+
+### Bloques E y F
 - Sin empezar.
 
 ## En curso
@@ -70,13 +95,10 @@ La verificación facial es obligatoria en la entrega como funcionalidad del sist
   - El seed no conoce el deudor 13 ni la cuenta 15: `--reset` los borra porque vacía las tablas de negocio.
 
 ## Pendiente (prioridad para la demo)
-1. **Bloque D (facial), obligatorio** (detalle abajo).
-2. **Bloque C (frontend), resto:** pantallas de administrador 12 (movimiento de saldo) y 13 (gestión de usuarios).
+1. **Probar la verificación facial con una cámara real** (el usuario, con su propio rostro). Al primer acceso cada cuenta pide registrar el rostro.
+2. **Bloque C (frontend), resto:** pantallas de administrador 12 (movimiento de saldo) y 13 (gestión de usuarios, con el botón de restablecimiento facial y la columna `facialInscrito`).
 3. **Bloque E (dashboard):** Recharts sobre `/panel/resumen` y `/panel/prioridades`, y la lista de cuentas con `orden=prioridad`. El backend ya está listo.
-4. **Bloque D (facial, obligatorio para la entrega):**
-   - Microservicio FastAPI en `Services/ai-service` con `/health`, `/enroll` y `/verify` (MTCNN + Inception-ResNet-v1 VGGFace2, umbral 0.40).
-   - En NestJS: `POST /facial/inscripciones` y `POST /facial/verificaciones` (multipart, campo `captura`), cifrado de la galería, cookie `solvia_face` (JWT HS256 de 30 min), `FaceVerifiedGuard` real, `cookie-parser` y bloqueo 429 tras 5 fallos en 15 min.
-   - En el frontend: `/configuracion-facial` y `/verifica-rostro`.
+4. Opcional: detección de rostro en el navegador (`face-api.js` o MediaPipe, como dice `docs/definicion_proyecto.md`), para avisar antes de enviar la captura. Hoy la detección la hace solo el microservicio.
 5. `POST /usuarios` (invitación en Neon Auth). Si no da tiempo, los usuarios se crean desde la consola o el MCP de Neon.
 6. **Bloque F (opcional):** reporte ejecutivo con métricas, texto generado por LLM y PDF para el administrador.
 
@@ -97,7 +119,12 @@ Todas las variables van en el `.env` de la raíz del repositorio, que no se vers
 | `PORT` | Opcional, por defecto 3000 |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Aún no se usan en el código |
 
-Bloque D (por crear): `AI_SERVICE_URL`, `AI_INTERNAL_KEY`, `FACE_GALLERY_KEY` y `FACE_JWT_SECRET`.
+| `AI_SERVICE_URL` | URL del microservicio facial (`http://localhost:8000`) |
+| `AI_INTERNAL_KEY` | Clave compartida backend ↔ microservicio (header `X-Internal-Key`) |
+| `FACE_GALLERY_KEY` | Clave AES-256 (32 bytes en base64) de las galerías faciales |
+| `FACE_JWT_SECRET` | Firma de la cookie `solvia_face` |
+| `FACE_THRESHOLD`, `FACE_MIN_SIZE` | Opcionales del microservicio (0.60 y 80 px) |
+| `FACE_COOKIE_SECURE` | Opcional; `true` para `SameSite=None; Secure` con dominios distintos |
 
 ```bash
 # Base de datos (rama desarrollo)
@@ -116,12 +143,13 @@ cd ../FrontEnd
 npm install
 npm run dev                  # http://localhost:5173
 
-# Microservicio facial (bloque D, aún vacío)
-# Services/ai-service solo tiene un venv con Python 3.14; conviene recrearlo con
-# Python 3.11 o 3.12 por compatibilidad con PyTorch y facenet-pytorch:
-#   py -3.12 -m venv venv && venv\Scripts\activate
-#   pip install fastapi uvicorn facenet-pytorch pillow python-multipart
-#   uvicorn main:app --port 8000
+# Microservicio facial (Python 3.14; ver requirements.txt)
+cd ../Services/ai-service
+venv\Scripts\python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+venv\Scripts\python -m pip install facenet-pytorch==2.6.0 --no-deps
+venv\Scripts\python -m pip install -r requirements.txt
+venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
+# La primera vez descarga los pesos de VGGFace2 (107 MB). Sin el microservicio nadie puede entrar.
 ```
 
 ## Cómo lo verifiqué
@@ -136,7 +164,7 @@ npm run dev                  # http://localhost:5173
 - **Zona horaria:** el pooler ignoraba el `ALTER DATABASE` y la conexión seguía en GMT. Con la opción de arranque de la conexión, las consultas por pooler devuelven America/Mexico_City.
 - **Backend:**
   - `tsc --noEmit` y `npm run build` sin errores.
-  - `npm run lint` solo muestra el aviso del stub `FaceVerifiedGuard`.
+  - `npm run lint` sin avisos (desde el bloque D).
   - Script temporal (ya borrado) que ejecutó cada consulta de los servicios contra `desarrollo`: todas responden.
   - El gestor 1 recibe 404 al pedir una cuenta del gestor 2.
   - El panel del gestor 1 muestra 7 cuentas y un índice de morosidad de 57.1.
@@ -164,11 +192,30 @@ npm run dev                  # http://localhost:5173
   - La revisión y la confirmación dieron 201 y redirigen al detalle con el aviso. Una referencia repetida da 409, con el mensaje legible.
   - gestor1 ve "Sin permiso" en `/cuentas/nueva`, no ve el botón y sí ve SOL-016 en sus cuentas.
   - `npm run lint` y `npm run build` del frontend, sin errores.
+- **Bloque D (28 de octubre):**
+  - Calibración con fotos públicas: las de prueba de facenet-pytorch más una foto de Wikipedia de tres de esas personas. Misma persona: 0.684, 0.716 y 0.744. Personas distintas: hasta 0.540 (Angelina Jolie contra Kate Siegel), por eso el umbral pasó de 0.50 a 0.60.
+  - Microservicio: la foto grupal da 422 `multiples_rostros`, la petición sin clave da 401, Cooper contra Cooper coincide (0.716) y Rudd contra Cooper no (0.417).
+  - De punta a punta en Chrome con cámara simulada (archivo `.y4m`):
+    - gestor1 sin rostro es enviado a `/registro-facial`; 3 capturas dan 201 y entra al panel.
+    - Al cerrar sesión, la cookie se borra (204).
+    - Un impostor (Paul Rudd) recibe "El rostro no coincide… Te quedan 4 intentos".
+    - El titular (otra foto de Cooper) da 201 y entra; ve sus 9 cuentas.
+  - Por HTTP:
+    - Sin cookie, 401 `FACE_VERIFICATION_REQUIRED`. Con cookie, 200. La cookie de gestor1 con el token de gestor2 da 401, igual que una firma falsa.
+    - Reinscribirse sin verificar da 403 y la respuesta no incluye el score.
+    - Un gestor que intenta restablecer recibe 403. Sin captura, 400. Con varios rostros, 422.
+    - 5 impostores dan 401 con 4…0 intentos restantes; el sexto y el titular durante el bloqueo, 429.
+    - Sin rostro registrado (gestor2), 409. Con el microservicio detenido, 503.
+  - En la base: 3 vectores, 6,144 bytes cifrados, IV de 12 y etiqueta de 16 bytes; la bitácora registra cada resultado.
+  - Backend: `tsc` y `npm run lint` limpios, salvo los specs viejos ya conocidos. Frontend: `npm run lint` y `npm run build`, sin errores.
+  - **No verificado:** cámara real, el restablecimiento por un administrador verificado (requiere que el administrador registre su rostro) y la expiración de la cookie a los 30 min durante el uso.
 - **No verificado:** tests unitarios (por decisión, el bloque B se hizo sin tests).
 
 ## Decisiones y desvíos
 - **`/me` usa `Authorization: Bearer`** en lugar de la cookie de Neon Auth: esa cookie es del dominio de Neon y el navegador no la envía al backend. `NeonSessionService` quedó en el código pero ya no se usa.
-- **`facial.verificado` devuelve siempre `true`** y `FaceVerifiedGuard` deja pasar todo hasta el bloque D, para no bloquear el frontend.
+- **Verificación facial obligatoria para todos** (28 de octubre, decisión del usuario), como dice el contrato de la API. Los wireframes y `docs/SolvIA_mapa_funcional_y_pantallas.md` todavía la llaman opcional.
+- **La IA facial vive en Python;** NestJS solo cifra, guarda, limita intentos y emite la prueba. El microservicio no tiene estado y recibe la galería en cada verificación.
+- **Python 3.14 + torch 2.14 CPU:** facenet-pytorch 2.6 fija `torch<2.3`, así que se instala con `--no-deps`; funciona con torch reciente.
 - **Zona horaria:** además de `ALTER DATABASE`, se pasa `-c TimeZone=America/Mexico_City` en el Pool, porque el pooler de Neon (PgBouncer) no respeta el ajuste de la base.
 - **Se sigue `docs/SolvIA_contrato_API_v1.md`** (camelCase). `docs/contrato_api.md` (snake_case) queda como versión anterior.
 - **Movimientos:** el cliente envía siempre un monto positivo y el backend aplica el signo según el tipo.
@@ -193,7 +240,9 @@ npm run dev                  # http://localhost:5173
   - 2 de 22 fallan desde antes de estos cambios: a los specs de `DatabaseService` y `NeonAuthGuard` les falta `ConfigService`.
   - Los specs nuevos generados por Nest (p. ej. `pagos.*.spec.ts`) no proveen `DatabaseService`.
   - `test/app.e2e-spec.ts` todavía espera `GET /`.
-- **Microservicio facial:** `Services/ai-service` solo tiene un venv en Python 3.14, que probablemente no sea compatible con PyTorch.
+- **Plantilla facial de prueba de gestor1:** se borró el 28 de octubre con permiso del usuario; gestor1 vuelve a pedir el registro facial en su primer acceso. Las filas de prueba de `facial_intentos` se quedan porque la tabla es inmutable.
+- **Sin el microservicio (puerto 8000) nadie puede entrar:** la verificación es obligatoria. Hay que levantarlo junto con el backend.
+- **Cámara:** `getUserMedia` solo funciona en HTTPS o `localhost`.
 - **Variables AWS:** existen en `.env` pero el código no las usa.
 
 ## Siguiente paso
@@ -205,7 +254,9 @@ npm run dev                  # http://localhost:5173
 - Neon: proyecto `aged-paper-03532903`, rama `desarrollo` = `br-bold-dust-b4aymjsk`. La rama por defecto es `production` (`br-soft-frost-b4rpx0vq`): pasar siempre la rama de forma explícita.
 - Para probar en el navegador sin intervención: `playwright-core` con el Chrome instalado (`C:/Program Files/Google/Chrome/Application/chrome.exe`), instalado en el scratchpad. En Git Bash, usar `MSYS_NO_PATHCONV=1` al pasar rutas como `/cuentas`.
 
-Orden propuesto (la entrega es el 30 de octubre y la verificación facial es obligatoria):
-1. Bloque D (facial): microservicio, endpoints en NestJS, `FaceVerifiedGuard` real y pantallas `/configuracion-facial` y `/verifica-rostro`. Antes, recrear el venv con Python 3.11 o 3.12.
-2. Pantallas 12 (movimiento de saldo) y 13 (gestión de usuarios).
+- Probar la verificación facial con cámara de forma automática: Chrome con `--use-fake-device-for-media-stream --use-file-for-fake-video-capture=<foto>.y4m`. Los scripts del 28 de octubre (`facial-e2e.mjs`, `facial-http.mjs`, `calibrar.py`, `a_y4m.py`) estaban en el scratchpad de esa sesión.
+
+Orden propuesto (entrega el 30 de octubre):
+1. Que el usuario pruebe la verificación facial con su cámara.
+2. Pantallas 12 (movimiento de saldo) y 13 (gestión de usuarios, con restablecimiento facial).
 3. Bloque E (Recharts).

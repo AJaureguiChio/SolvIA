@@ -1,20 +1,33 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service.js';
 import { Usuario } from './decoradores.js';
 import {
   NeonAuthGuard,
+  type RequestSolvia,
   type UsuarioActual,
 } from './guards/neon-auth/neon-auth.guard.js';
+import { pruebaFacialVigente } from './prueba-facial.js';
 
 // /me solo exige la identidad de Neon Auth: es el punto de partida del
 // flujo facial, asi que no puede requerir la verificacion facial.
 @Controller('me')
 @UseGuards(NeonAuthGuard)
 export class MeController {
-  constructor(private readonly database: DatabaseService) {}
+  private readonly secretoFacial: string;
+
+  constructor(
+    private readonly database: DatabaseService,
+    config: ConfigService,
+  ) {
+    this.secretoFacial = config.getOrThrow<string>('FACE_JWT_SECRET');
+  }
 
   @Get()
-  async obtenerPerfil(@Usuario() usuario: UsuarioActual) {
+  async obtenerPerfil(
+    @Usuario() usuario: UsuarioActual,
+    @Req() request: RequestSolvia,
+  ) {
     const { rows } = await this.database.query(
       `SELECT u.name AS nombre, u.email,
               EXISTS (SELECT 1 FROM public.facial_plantillas f
@@ -34,9 +47,11 @@ export class MeController {
       email: datos?.email ?? null,
       facial: {
         inscrito: datos?.inscrito ?? false,
-        // TODO(bloque D): leer la prueba facial de la cookie solvia_face.
-        // Mientras FaceVerifiedGuard no la exige, el acceso no se bloquea.
-        verificado: true,
+        verificado: await pruebaFacialVigente(
+          request,
+          usuario.id,
+          this.secretoFacial,
+        ),
       },
     };
   }

@@ -5,10 +5,12 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
 } from '@nestjs/common';
 import { Protegido, Roles, Usuario } from '../auth/decoradores.js';
 import type { UsuarioActual } from '../auth/guards/neon-auth/neon-auth.guard.js';
+import { FacialService } from '../facial/facial.service.js';
 import { ActualizarUsuarioDto, ListarUsuariosDto } from './usuarios.dto.js';
 import { UsuariosService } from './usuarios.service.js';
 
@@ -18,7 +20,10 @@ import { UsuariosService } from './usuarios.service.js';
 @Protegido()
 @Roles('administrador')
 export class UsuariosController {
-  constructor(private readonly usuariosService: UsuariosService) {}
+  constructor(
+    private readonly usuariosService: UsuariosService,
+    private readonly facialService: FacialService,
+  ) {}
 
   @Get()
   listar(@Query() filtros: ListarUsuariosDto) {
@@ -37,5 +42,13 @@ export class UsuariosController {
     @Body() dto: ActualizarUsuarioDto,
   ) {
     return this.usuariosService.actualizar(admin, id, dto);
+  }
+
+  // Borra la plantilla facial; el usuario la registra de nuevo en su
+  // siguiente acceso (excepción de primer acceso).
+  @Post(':id/restablecimiento-facial')
+  async restablecerFacial(@Param('id', ParseUUIDPipe) id: string) {
+    await this.usuariosService.obtener(id);
+    return this.facialService.restablecer(id);
   }
 }

@@ -1,10 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { api, ApiError } from '../lib/api.js';
+import { api, ApiError, cuandoSeExijaRostro } from '../lib/api.js';
 import { authClient } from '../lib/auth.js';
 
 const SesionContext = createContext(null);
 
-// estado: cargando | anonimo | listo | sin_perfil | inactivo | error
+// estado: cargando | anonimo | requiere_inscripcion | requiere_verificacion | listo | sin_perfil | inactivo | error
+// La verificación facial es obligatoria: sin rostro registrado se pide registrarlo
+// (primer acceso) y, si ya existe, verificarlo antes de usar SolvIA.
+function estadoFacial(perfil) {
+  if (!perfil.facial.inscrito) return 'requiere_inscripcion';
+  if (!perfil.facial.verificado) return 'requiere_verificacion';
+  return 'listo';
+}
+
 export function SesionProvider({ children }) {
   const [estado, setEstado] = useState('cargando');
   const [usuario, setUsuario] = useState(null);
@@ -20,8 +28,9 @@ export function SesionProvider({ children }) {
       return;
     }
     try {
-      setUsuario(await api('/me'));
-      setEstado('listo');
+      const perfil = await api('/me');
+      setUsuario(perfil);
+      setEstado(estadoFacial(perfil));
     } catch (e) {
       setUsuario(null);
       if (e instanceof ApiError && e.code === 'PROFILE_REQUIRED') setEstado('sin_perfil');
@@ -36,6 +45,8 @@ export function SesionProvider({ children }) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial de la sesión
     cargarPerfil();
+    // Si la prueba facial caduca mientras se usa la app, se vuelve a pedir.
+    cuandoSeExijaRostro(() => setEstado((actual) => (actual === 'listo' ? 'requiere_verificacion' : actual)));
   }, [cargarPerfil]);
 
   const iniciarSesion = useCallback(
@@ -49,6 +60,8 @@ export function SesionProvider({ children }) {
   );
 
   const cerrarSesion = useCallback(async () => {
+    // Borra la prueba facial antes de cerrar la sesión de Neon Auth.
+    await api('/facial/verificacion', { method: 'DELETE' }).catch(() => {});
     await authClient.signOut();
     setUsuario(null);
     setEstado('anonimo');

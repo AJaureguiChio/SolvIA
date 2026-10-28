@@ -7,5 +7,6 @@ import { DatabaseModule } from '../database/database.module.js';
   imports: [DatabaseModule],
   controllers: [FacialController],
   providers: [FacialService],
+  exports: [FacialService],
 })
 export class FacialModule {}

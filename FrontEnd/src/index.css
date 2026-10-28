@@ -123,6 +123,11 @@ tbody tr:nth-child(even) { background: #f9fafb; }
 .auth-panel h2 { font-size: 21px; margin: 16px 0 6px; }
 .auth-panel p { font-size: 12px; line-height: 1.5; color: #5a6d78; }
 .auth-panel .btn { width: 100%; margin-top: 8px; }
+.badge { display: inline-block; border: 1px solid #aebcc6; background: #f7f9fa; border-radius: 4px; padding: 3px 7px; color: #50616d; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.camera { min-height: 240px; display: grid; place-items: center; text-align: center; border: 2px dashed #9caab3; background: #e5e9ec; position: relative; color: #566873; font-size: 12px; overflow: hidden; border-radius: 4px; }
+.camera video { width: 100%; display: block; transform: scaleX(-1); }
+.face { width: 100px; height: 125px; border: 3px dashed #899ba7; border-radius: 48%; margin: 12px auto; }
+.camera .face.guia { position: absolute; inset: 50% auto auto 50%; width: 38%; height: auto; aspect-ratio: 4 / 5; margin: 0; transform: translate(-50%, -50%); border-color: #ffffffcc; pointer-events: none; }
 
 .screen-footer { padding: 12px 20px; border-top: 1px solid #d7dfe4; background: #f8f9fa; color: #60717b; font-size: 10px; }
 

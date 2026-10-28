@@ -1,0 +1,11 @@
+# PyTorch CPU (Python 3.14): instalar antes desde el índice de PyTorch
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# facenet-pytorch fija torch<2.3; se instala sin dependencias y funciona con torch reciente:
+#   pip install facenet-pytorch==2.6.0 --no-deps
+fastapi
+uvicorn[standard]
+python-multipart
+pillow
+numpy
+requests
+tqdm

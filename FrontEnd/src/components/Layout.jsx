@@ -22,6 +22,9 @@ export default function Layout() {
           <span>
             {nombre} · {usuario.rol === 'administrador' ? 'Administrador' : 'Gestor'}
           </span>
+          <NavLink to="/configuracion-facial" className="link">
+            Mi rostro
+          </NavLink>
           <span className="avatar" aria-hidden="true">
             {nombre.charAt(0).toUpperCase()}
           </span>

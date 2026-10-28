@@ -17,6 +17,8 @@ export default function Login() {
   const [error, setError] = useState(null);
 
   if (estado === 'listo') return <Navigate to={location.state?.desde ?? '/'} replace />;
+  if (estado === 'requiere_inscripcion') return <Navigate to="/registro-facial" replace />;
+  if (estado === 'requiere_verificacion') return <Navigate to="/verifica-rostro" replace state={location.state} />;
 
   async function enviar(ev) {
     ev.preventDefault();
@@ -87,7 +89,7 @@ export default function Login() {
           </form>
         )}
         <div className="notice" style={{ marginTop: 15 }}>
-          Si habilitaste la verificación facial, se solicitará después de iniciar sesión.
+          Después de iniciar sesión se verificará tu rostro con la cámara.
         </div>
       </div>
     </div>

@@ -16,8 +16,10 @@ info:
 
     **Alcance por rol:** el gestor solo ve deudores/cuentas que tiene asignadas; un ID ajeno responde 404.
 
-    **Verificación facial:** hasta el bloque D, `FaceVerifiedGuard` deja pasar todo y `/me` devuelve `facial.verificado: true`.
-    Después, las rutas de negocio exigirán además la cookie httpOnly `solvia_face`.
+    **Verificación facial (obligatoria):** además del JWT, las rutas de negocio exigen la cookie httpOnly `solvia_face`
+    (JWT HS256 de 30 min ligado al usuario), que emiten `POST /facial/inscripciones` y `POST /facial/verificaciones`.
+    Sin ella responden 401 `FACE_VERIFICATION_REQUIRED`. `/me` y `/facial/*` solo exigen el JWT de Neon Auth.
+    En Apidog, guarda la cookie de la respuesta de verificación y envíala en las demás peticiones.
 
     **Errores:** siempre `{ "error": { "code", "message", "details" } }`.
 servers:
@@ -25,6 +27,7 @@ servers:
     description: Backend local (NestJS)
 tags:
   - name: Sesión
+  - name: Facial
   - name: Deudores
   - name: Cuentas
   - name: Pagos
@@ -55,6 +58,104 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+
+  # ------------------------------------------------------------------- Facial
+  /facial/inscripciones:
+    post:
+      tags: [Facial]
+      summary: Registrar el rostro propio (primer acceso o nuevo registro)
+      description: |
+        De 1 a 5 capturas en el campo `captura` (JPEG, PNG o WebP; 5 MB cada una). El microservicio Python extrae un embedding
+        por captura y el backend guarda la galería cifrada (AES-256-GCM); no se conservan fotos. Si el usuario ya tenía rostro,
+        reemplazarlo exige una prueba facial vigente (403 `FACE_REENROLL_FORBIDDEN`). Al terminar emite la cookie `solvia_face`.
+      operationId: inscribirRostro
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [captura]
+              properties:
+                captura:
+                  type: array
+                  minItems: 1
+                  maxItems: 5
+                  items: { type: string, format: binary }
+      responses:
+        '201':
+          description: Rostro registrado; incluye `Set-Cookie` con `solvia_face`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verificado: { type: boolean }
+                  expiraEn: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403':
+          description: Perfil inválido o `FACE_REENROLL_FORBIDDEN`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/CapturaInvalida' }
+        '503': { $ref: '#/components/responses/ServicioFacialCaido' }
+
+  /facial/verificaciones:
+    post:
+      tags: [Facial]
+      summary: Verificar el rostro y obtener la prueba facial
+      description: |
+        Una captura en el campo `captura`. Si coincide con la galería (similitud coseno ≥ umbral del microservicio),
+        emite la cookie `solvia_face` por 30 min. El score nunca se devuelve. Tras 5 fallos en 15 min responde 429 `FACE_LOCKED`.
+      operationId: verificarRostro
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [captura]
+              properties:
+                captura: { type: string, format: binary }
+      responses:
+        '201':
+          description: Rostro verificado; incluye `Set-Cookie` con `solvia_face`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verificado: { type: boolean }
+                  expiraEn: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401':
+          description: Sin JWT (`UNAUTHENTICATED`) o rostro distinto (`FACE_MISMATCH`, con `details.intentosRestantes`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: El usuario aún no registra su rostro (`FACE_NOT_ENROLLED`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/CapturaInvalida' }
+        '429':
+          description: Demasiados intentos fallidos (`FACE_LOCKED`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503': { $ref: '#/components/responses/ServicioFacialCaido' }
+
+  /facial/verificacion:
+    delete:
+      tags: [Facial]
+      summary: Cerrar la prueba facial (borra la cookie)
+      operationId: cerrarVerificacionFacial
+      responses:
+        '204': { description: Cookie `solvia_face` eliminada }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
 
   # ----------------------------------------------------------------- Deudores
   /deudores:
@@ -595,6 +696,30 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /usuarios/{id}/restablecimiento-facial:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Usuarios]
+      summary: Borrar el registro facial de un usuario (administrador)
+      description: El usuario vuelve a registrar su rostro en su siguiente acceso. La bitácora de intentos se conserva.
+      operationId: restablecerFacial
+      responses:
+        '201':
+          description: Resultado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restablecido: { type: boolean, description: false si no tenía rostro registrado }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -641,7 +766,9 @@ components:
               details:
                 monto: [monto debe ser un importe positivo con hasta dos decimales]
     NoAutenticado:
-      description: Falta el token o es inválido/vencido (`UNAUTHENTICATED`)
+      description: |
+        Falta el token o es inválido/vencido (`UNAUTHENTICATED`), o en rutas de negocio falta la prueba facial
+        vigente (`FACE_VERIFICATION_REQUIRED`)
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -652,6 +779,17 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
     NoEncontrado:
       description: No existe o no es visible para el usuario (`NOT_FOUND`)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    CapturaInvalida:
+      description: |
+        La captura no sirve (`FACE_CAPTURE_INVALID`); `details.motivo` es `sin_rostro`, `multiples_rostros` o `rostro_pequeno`
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ServicioFacialCaido:
+      description: El microservicio de reconocimiento facial no responde (`FACE_SERVICE_UNAVAILABLE`)
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -722,7 +860,7 @@ components:
           type: object
           properties:
             inscrito: { type: boolean }
-            verificado: { type: boolean, description: 'Por ahora siempre true (bloque D pendiente)' }
+            verificado: { type: boolean, description: 'true si la cookie solvia_face es válida y del usuario' }
 
     CrearDeudor:
       type: object
@@ -1022,3 +1160,4 @@ components:
         rol: { $ref: '#/components/schemas/Rol' }
         activo: { type: boolean }
         cuentasAsignadas: { type: integer }
+        facialInscrito: { type: boolean }
