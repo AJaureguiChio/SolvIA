@@ -142,3 +142,10 @@ tbody tr:nth-child(even) { background: #f9fafb; }
   .apphead { padding: 8px 12px; }
   .appnav { margin-left: 0; order: 3; width: 100%; }
 }
+
+/* Bloque E: tabla de datos bajo cada gráfica y medidor de prioridad */
+.tabla-datos { margin-top: 10px; font-size: 11px; }
+.tabla-datos summary { cursor: pointer; color: var(--muted); margin-bottom: 8px; }
+.medidor { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.medidor-barra { display: inline-block; width: 48px; height: 6px; border-radius: 3px; background: var(--light); overflow: hidden; }
+.medidor-barra span { display: block; height: 100%; background: #2a78d6; border-radius: 3px; }

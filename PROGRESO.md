@@ -92,7 +92,17 @@ Política decidida por el usuario: **obligatoria para todos**. Tras Neon Auth, q
 - `.env`: se agregaron `AI_SERVICE_URL`, `AI_INTERNAL_KEY`, `FACE_GALLERY_KEY` (32 bytes en base64) y `FACE_JWT_SECRET`, generados al azar. Si se pierde `FACE_GALLERY_KEY`, las galerías no se pueden descifrar y hay que registrar de nuevo.
 - `docs/openapi.yaml`: rutas faciales, restablecimiento y respuestas `CapturaInvalida` y `ServicioFacialCaido` (válido con Redocly). `AGENTS.md`: la verificación facial ya es obligatoria.
 
-### Bloques E y F
+### Bloque E — Dashboard con Recharts (29 de octubre)
+- `recharts` 3.10.1. `src/components/Graficas.jsx`:
+  - `GraficaPagos`: barras de lo pagado por mes y línea de lo esperado (cuotas que vencían), un solo eje, leyenda y tooltip con importes.
+  - `GraficaCartera`: barras horizontales de cuentas al corriente, atrasadas, cubiertas sin liquidar y liquidadas, con el número junto a cada barra.
+  - `GraficaMorosidad`: cuentas vigentes por rango de días de mora, en una rampa de un solo tono (más oscuro = más mora); el tooltip incluye el monto vencido.
+  - `MedidorPrioridad`: barra 0–100 junto a la P en la tabla de prioridades.
+  - Colores de la paleta validada de la skill dataviz (azul `#2a78d6` y naranja `#eb6834`, marcas distintas: barra frente a línea). El texto va siempre en tinta neutra, nunca en el color de la serie.
+- `Panel.jsx` (administrador y gestor, cada uno con su alcance): tendencia de pagos, estado de la cartera con los saldos, morosidad por días de atraso, próximos vencimientos y prioridades. Las tablas de pagos y de morosidad quedan en un "Ver tabla" plegable bajo cada gráfica.
+- La lista de cuentas ya se ordenaba por prioridad (`orden=prioridad`) desde el bloque C.
+
+### Bloque F
 - Sin empezar.
 
 ## En curso
@@ -106,7 +116,7 @@ Política decidida por el usuario: **obligatoria para todos**. Tras Neon Auth, q
 ## Pendiente (prioridad para la demo)
 1. **Probar la pantalla 12 en el navegador:** un cargo, un abono, un abono mayor al saldo (bloqueado) y una reversión con su pago de origen.
 2. ~~Verificación facial con cámara real~~: hecha por el usuario. El 29 de octubre el administrador principal, gestor1 y gestor2 tienen rostro registrado; `admin@solvia.com` no.
-3. **Bloque E (dashboard):** Recharts sobre `/panel/resumen` y `/panel/prioridades`, y la lista de cuentas con `orden=prioridad`. El backend ya está listo.
+3. **Revisar el panel con datos reales** (bloque E) como administrador y como gestor.
 4. Opcional: detección de rostro en el navegador (`face-api.js` o MediaPipe, como dice `docs/definicion_proyecto.md`), para avisar antes de enviar la captura. Hoy la detección la hace solo el microservicio.
 5. `POST /usuarios` (invitación en Neon Auth). Si no da tiempo, los usuarios se crean desde la consola o el MCP de Neon.
 6. **Bloque F (opcional):** reporte ejecutivo con métricas, texto generado por LLM y PDF para el administrador.
@@ -231,6 +241,9 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - **Pantallas 12 y 13 (29 de octubre):** `npm run lint` y `npm run build` del frontend, sin errores.
   - Pantalla 13 probada por el usuario en su navegador: listado, aviso al desactivar un gestor con cuentas y reasignación.
   - **No verificado:** la pantalla 12 en el navegador (necesita el rostro del administrador).
+- **Bloque E (29 de octubre):** `npm run lint` y `npm run build`, sin errores. El build avisa que el bundle pasa de 500 kB (Recharts); no bloquea.
+  - Las cuatro gráficas se renderizaron con datos de ejemplo en una página temporal (ya borrada), con Chrome headless a 1280 y 390 px de ancho: sin errores de consola, tooltip correcto al pasar el cursor y etiquetas en tinta `#27313a`.
+  - **No verificado:** el panel con datos reales en el navegador (necesita sesión con rostro).
 - **No verificado:** tests unitarios (por decisión, el bloque B se hizo sin tests).
 
 ## Decisiones y desvíos
@@ -279,6 +292,6 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - Probar la verificación facial con cámara de forma automática: Chrome con `--use-fake-device-for-media-stream --use-file-for-fake-video-capture=<foto>.y4m`. Los scripts del 28 de octubre (`facial-e2e.mjs`, `facial-http.mjs`, `calibrar.py`, `a_y4m.py`) estaban en el scratchpad de esa sesión.
 
 Orden propuesto (entrega el 30 de octubre):
-1. Que el usuario pruebe la pantalla 12 (movimiento de saldo) en su navegador.
-2. Bloque E (Recharts sobre `/panel/resumen` y `/panel/prioridades`).
+1. Que el usuario pruebe la pantalla 12 (movimiento de saldo) y el panel con gráficas en su navegador.
+2. Opcional: dividir el bundle (carga diferida del panel o de Recharts) para quitar el aviso de 500 kB.
 3. Si hay tiempo: detección de rostro en el navegador, `POST /usuarios` o el bloque F.

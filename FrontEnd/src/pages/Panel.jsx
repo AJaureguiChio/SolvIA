@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { Cargando, ErrorCarga, PillPlan, Stat, Titulo, Vacio } from '../components/comunes.jsx';
+import { GraficaCartera, GraficaMorosidad, GraficaPagos, MedidorPrioridad } from '../components/Graficas.jsx';
 import { api } from '../lib/api.js';
 import { fecha, importe, nombreUsuario } from '../lib/formato.js';
 import { useCarga } from '../lib/useCarga.js';
@@ -52,8 +53,12 @@ export default function Panel() {
         )}
 
         <div className="card col7">
-          <h3>Pagos por mes frente a lo esperado</h3>
-          <div className="tablewrap">
+          <h3>{esAdmin ? 'Tendencia de pagos' : 'Pagos de mis cuentas'}</h3>
+          <p className="muted">Pagado por mes frente a las cuotas que vencían en ese mes.</p>
+          <GraficaPagos datos={resumen.pagosPorPeriodo} />
+          <details className="tabla-datos">
+            <summary>Ver tabla</summary>
+            <div className="tablewrap">
             <table>
               <thead>
                 <tr>
@@ -74,12 +79,13 @@ export default function Panel() {
                 ))}
               </tbody>
             </table>
-          </div>
-          <p className="muted">La gráfica de tendencia se añadirá con el dashboard.</p>
+            </div>
+          </details>
         </div>
 
         <div className="card col5">
-          <h3>Saldo de la cartera</h3>
+          <h3>Estado de la cartera</h3>
+          <GraficaCartera totales={t} />
           <p>
             Saldo total: <strong>{importe(t.saldoTotal)}</strong>
           </p>
@@ -89,7 +95,39 @@ export default function Panel() {
           <p>
             Vencido: <strong>{importe(t.montoVencido)}</strong>
           </p>
-          <h3 className="section">Próximos vencimientos (30 días)</h3>
+        </div>
+
+        <div className="card col7">
+          <h3>Morosidad por días de atraso</h3>
+          <p className="muted">Cuentas vigentes según sus días de mora.</p>
+          <GraficaMorosidad datos={resumen.morosidad} />
+          <details className="tabla-datos">
+            <summary>Ver tabla</summary>
+            <div className="tablewrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Días de mora</th>
+                    <th className="num">Cuentas</th>
+                    <th className="num">Vencido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resumen.morosidad.map((r) => (
+                    <tr key={r.rango}>
+                      <td>{r.rango === 'sin_mora' ? 'Sin mora' : r.rango}</td>
+                      <td className="num">{r.cuentas}</td>
+                      <td className="num">{importe(r.montoVencido)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+
+        <div className="card col5">
+          <h3>Próximos vencimientos (30 días)</h3>
           {resumen.proximosVencimientos.length === 0 ? (
             <p className="muted">Sin vencimientos próximos.</p>
           ) : (
@@ -154,7 +192,9 @@ export default function Panel() {
                       </td>
                       <td className="num">{importe(p.montoVencido)}</td>
                       <td className="num">{p.diasMora}</td>
-                      <td className="num">{p.prioridad}</td>
+                      <td className="num">
+                        <MedidorPrioridad valor={p.prioridad} />
+                      </td>
                       {esAdmin && <td>{nombreUsuario(p.responsable)}</td>}
                       <td>
                         <Link to={`/cuentas/${p.id}`} className="btn">
