@@ -16,11 +16,26 @@
 - En Neon pasa siempre la rama `desarrollo` de forma explícita: la rama por defecto del proyecto es `production`.
 - Pide autorización antes de escribir en el esquema `neon_auth` (usuarios, cuentas y contraseñas).
 - No borres el usuario `prueba.registro@solvia.demo` sin que el usuario lo pida.
+- `POST /usuarios` crea cuentas reales en Neon Auth: no lo ejecutes en pruebas sin autorización del usuario.
+- Los reportes son inmutables (no admiten UPDATE ni DELETE): no guardes reportes de prueba sin autorización; prueba su SQL en una transacción revertida.
 - "Hoy" para la API es la fecha en America/Mexico_City, no la UTC.
+
+## Reportes e IA (bloque F)
+
+- El texto de los reportes lo redacta Gemini (`GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_MODEL_RESPALDO`) consultando las métricas por MCP: el servidor MCP está en `BackEnd/src/reportes/mcp/servidor-solvia.ts`. Una métrica nueva para el LLM se agrega ahí como herramienta de solo lectura, sin datos personales de deudores.
+- El PDF se arma en el navegador (`FrontEnd/src/lib/pdfReporte.js`, jsPDF) y el backend lo valida y lo guarda en `reportes.archivo_pdf`.
+
+## Convenciones del backend (`BackEnd/`)
+
+- Los errores siguen el contrato `{ error: { code, message, details } }` con `ApiError` (`src/common/api-error.ts`); los mensajes de los triggers se traducen en `src/common/api-exception.filter.ts`.
+- Las rutas de negocio usan `@Protegido()` y `@Roles()` (`src/auth/decoradores.ts`); el gestor solo ve lo suyo y un recurso ajeno responde 404.
+- Documenta cada ruta nueva en `docs/openapi.yaml`.
+- Antes de dar por terminado un cambio: `npm run lint` y `npm run build` en `BackEnd/` (`tsc` marca errores conocidos en specs viejos; ver `PROGRESO.md`).
 
 ## Convenciones del frontend (`FrontEnd/`)
 
 - Las llamadas a la API pasan por `src/lib/api.js` y las cargas de datos por `src/lib/useCarga.js`.
 - Formato de importes y fechas en `src/lib/formato.js`; componentes compartidos (carga, error, vacío, paginación) en `src/components/comunes.jsx`.
 - La sesión y el rol salen de `useSesion()` (`src/sesion/SesionContext.jsx`).
+- Las gráficas usan Recharts (`src/components/Graficas.jsx`) con la paleta validada; Recharts, jsPDF, jspdf-autotable y html2canvas se cargan bajo demanda (`lazy` / `import()`) para que ningún archivo del bundle pase de 500 kB.
 - Antes de dar por terminado un cambio: `npm run lint` y `npm run build` en `FrontEnd/`.

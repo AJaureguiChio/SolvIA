@@ -2,7 +2,9 @@
 
 Última actualización: 2026-10-29. Entrega: viernes 30 de octubre de 2026 (antes era el 23). **La verificación facial (bloque D) es requisito de la entrega final.**
 
-Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) microservicio facial y flujo completo (obligatorio) · E) dashboard con Recharts · F) reporte ejecutivo (solo si hay tiempo).
+Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) microservicio facial y flujo completo (obligatorio) · E) dashboard con Recharts · F) reporte ejecutivo.
+
+**Estado al cerrar el 29 de octubre:** los bloques A a F están implementados y en `main`. Solo falta que el usuario pruebe en su navegador el bloque F, el alta de usuarios y el panel con gráficas (ver "Siguiente paso").
 
 La verificación facial es obligatoria para todos los usuarios (AGENTS.md, decisión del 28 de octubre): quien no tiene rostro lo registra en su primer acceso y quien lo tiene lo verifica. Los wireframes y el mapa funcional todavía la llaman opcional.
 
@@ -129,11 +131,11 @@ Decisiones del usuario: el LLM es **Gemini** (`GEMINI_API_KEY` en el `.env`) y l
   - El seed no conoce el deudor 13 ni la cuenta 15: `--reset` los borra porque vacía las tablas de negocio.
 
 ## Pendiente (prioridad para la demo)
-1. **Revisar el panel con datos reales** (bloque E) como administrador y como gestor.
-2. ~~Verificación facial con cámara real~~ y ~~pantallas 12 y 13~~: probadas por el usuario. El 29 de octubre el administrador principal, gestor1 y gestor2 tienen rostro registrado; `admin@solvia.com` no.
-3. Opcional: detección de rostro en el navegador (`face-api.js` o MediaPipe, como dice `docs/definicion_proyecto.md`), para avisar antes de enviar la captura. Hoy la detección la hace solo el microservicio.
-4. Probar el alta de un usuario desde la pantalla 13 (crea una identidad real en Neon Auth de `desarrollo`).
-5. **Probar el bloque F en el navegador:** redactar un borrador, guardar el PDF con destinatarios, entregar y descargarlo como gestor. Cada reporte guardado es **permanente** (inmutable) en `desarrollo`.
+1. **Probar el bloque F en el navegador:** redactar un borrador, guardar el PDF con destinatarios, entregar y descargarlo como gestor. Cada reporte guardado es **permanente** (inmutable) en `desarrollo`.
+2. **Probar el alta de un usuario** desde la pantalla 13 (crea una identidad real en Neon Auth de `desarrollo`).
+3. **Revisar el panel con datos reales** (bloque E) como administrador y como gestor.
+4. Opcional: detección de rostro en el navegador (`face-api.js` o MediaPipe, como dice `docs/definicion_proyecto.md`), para avisar antes de enviar la captura. Hoy la detección la hace solo el microservicio.
+5. ~~Verificación facial con cámara real~~ y ~~pantallas 12 y 13~~: probadas por el usuario. El 29 de octubre el administrador principal, gestor1 y gestor2 tienen rostro registrado; `admin@solvia.com` no.
 
 ## Cómo correrlo
 
@@ -287,6 +289,9 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - **Seed:** `--reset` es opt-in y nunca toca `perfiles_usuario` ni `neon_auth`.
 
 ## Problemas conocidos
+- **Gemini saturado:** el 29 de octubre por la noche Google respondió 503 "high demand" a `gemini-3.5-flash` y a `gemini-2.5-flash`. La pantalla 15 muestra "El modelo de lenguaje no respondió"; hay que esperar unos minutos o cambiar `GEMINI_MODEL` / `GEMINI_MODEL_RESPALDO` en el `.env` (la clave da acceso, entre otros, a `gemini-flash-latest`, `gemini-3.8-flash` y `gemini-2.5-pro`).
+- **Reportes permanentes:** un trigger impide UPDATE y DELETE en `reportes`; cada prueba que guarde un PDF deja un registro definitivo en `desarrollo` (solo `npm run db:seed -- --reset` vacía las tablas de negocio). Para probar el SQL sin dejar rastro, usar una transacción revertida (así se hizo el 29 de octubre).
+- **Avisos de npm:** `npm install` avisa que bloqueó los scripts de `core-js` y `protobufjs` (allowScripts); no afectan el funcionamiento.
 - **Carga lenta en recargas completas:** al abrir una URL directamente, la pantalla tarda de 3 a 5 s (`getSession`, luego `/me`, luego los datos). Navegando dentro de la app es rápido.
 - **La rama por defecto del proyecto Neon es `production`.** Cualquier herramienta sin rama explícita apunta ahí; conviene cambiar la rama por defecto o pasar siempre la de `desarrollo`.
 - **Contraseñas demo.** En `desarrollo`, `albertojairzinho@hotmail.com`, gestor1, gestor2, `admin@solvia.com` y el usuario temporal comparten la misma contraseña (no está en el repositorio). La cuenta `credential` del administrador se creó el 26 de octubre.
@@ -308,7 +313,7 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 
 ## Siguiente paso
 
-**Al retomar la sesión (28 de octubre en adelante; entrega el 30):**
+**Al retomar la sesión (30 de octubre, día de la entrega):**
 - `git status` debería estar limpio salvo `.env`.
 - El usuario suele tener corriendo su backend (puerto 3000, `dist/main`) y su Vite (5173). No detenerlos; un cambio en el backend requiere que el usuario lo reinicie.
 - La contraseña demo común no está en el repositorio: pedirla al usuario si hace falta probar por HTTP.
@@ -316,7 +321,14 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - Para probar en el navegador sin intervención: `playwright-core` con el Chrome instalado (`C:/Program Files/Google/Chrome/Application/chrome.exe`), instalado en el scratchpad. En Git Bash, usar `MSYS_NO_PATHCONV=1` al pasar rutas como `/cuentas`.
 
 - Probar la verificación facial con cámara de forma automática: Chrome con `--use-fake-device-for-media-stream --use-file-for-fake-video-capture=<foto>.y4m`. Los scripts del 28 de octubre (`facial-e2e.mjs`, `facial-http.mjs`, `calibrar.py`, `a_y4m.py`) estaban en el scratchpad de esa sesión.
+- Probar el backend sin HTTP ni rostro: `NestFactory.createApplicationContext(AppModule)` sobre `BackEnd/dist` y llamar al servicio con un `UsuarioActual` armado a mano (administrador principal `91a21c17-e691-482d-91c6-77e2cd3b903f`, gestor1 `9796da71-af00-44ce-9ffc-b2b895754078`). Los scripts del 29 de octubre (`borrador2.mjs`: borrador con Gemini; `borrador-sin-llm.mjs`; `reporte-sql.mjs`: SQL en transacción revertida; `pdf.mjs` + página Vite temporal: PDF en Chrome headless) estaban en el scratchpad de esa sesión.
+- Para revisar gráficas o el PDF sin sesión: una página Vite temporal dentro de `FrontEnd/` (`npx vite <carpeta> --port 51xx`) que importe los componentes; borrarla al terminar.
 
-Orden propuesto (entrega el 30 de octubre):
-1. Que el usuario pruebe los reportes (pantallas 14 y 15) y el alta de usuarios en su navegador, y revise el panel con gráficas.
-2. Si hay tiempo: detección de rostro en el navegador antes de enviar la captura.
+Orden propuesto para el 30 de octubre:
+1. **El usuario prueba en su navegador** (reiniciar antes el backend si corre desde `dist/main`):
+   - Pantalla 15 como administrador: redactar el borrador con IA, editarlo, generar el PDF con gestor1 como destinatario y "Confirmar la entrega al generar".
+   - Pantalla 14: el administrador ve el reporte entregado; gestor1 lo ve y descarga el PDF; gestor2 no lo ve.
+   - Pantalla 13: alta de un usuario de prueba (crea una cuenta real en Neon Auth de `desarrollo`); al entrar debe pedir el registro facial.
+   - Panel con gráficas como administrador y como gestor.
+2. Corregir lo que salga de esas pruebas y actualizar este archivo.
+3. Si hay tiempo: detección de rostro en el navegador antes de enviar la captura.
