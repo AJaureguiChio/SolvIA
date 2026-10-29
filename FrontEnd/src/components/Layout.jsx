@@ -17,6 +17,7 @@ export default function Layout() {
           </NavLink>
           <NavLink to="/deudores">Deudores</NavLink>
           <NavLink to="/cuentas">{usuario.rol === 'gestor' ? 'Mis cuentas' : 'Cuentas'}</NavLink>
+          {usuario.rol === 'administrador' && <NavLink to="/usuarios">Usuarios</NavLink>}
         </nav>
         <div className="right">
           <span>

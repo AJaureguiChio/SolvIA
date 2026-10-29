@@ -1,10 +1,10 @@
 # Progreso de SolvIA
 
-Última actualización: 2026-10-28. Entrega: viernes 30 de octubre de 2026 (antes era el 23). **La verificación facial (bloque D) es requisito de la entrega final.**
+Última actualización: 2026-10-29. Entrega: viernes 30 de octubre de 2026 (antes era el 23). **La verificación facial (bloque D) es requisito de la entrega final.**
 
 Plan acordado: A) base de datos · B) backend de negocio · C) frontend · D) microservicio facial y flujo completo (obligatorio) · E) dashboard con Recharts · F) reporte ejecutivo (solo si hay tiempo).
 
-La verificación facial es obligatoria en la entrega como funcionalidad del sistema. Para cada usuario sigue siendo un paso adicional opcional, que se exige solo si inscribió su rostro (AGENTS.md y wireframes).
+La verificación facial es obligatoria para todos los usuarios (AGENTS.md, decisión del 28 de octubre): quien no tiene rostro lo registra en su primer acceso y quien lo tiene lo verifica. Los wireframes y el mapa funcional todavía la llaman opcional.
 
 ## Hecho
 
@@ -56,6 +56,15 @@ La verificación facial es obligatoria en la entrega como funcionalidad del sist
   - Tabla de cuotas editable (añadir y quitar).
   - Valida antes de enviar las mismas reglas que los triggers: suma exacta en centavos, acuerdo no anterior a la originación, vencimientos no anteriores al acuerdo y estrictamente crecientes.
   - Se llega desde "Crear cuenta y plan" en la cartera y en la ficha del deudor. Los estilos `.steps` vienen del wireframe.
+- Pantalla 13, `src/pages/Usuarios.jsx` (`/usuarios`, solo administrador; enlace "Usuarios" en la cabecera), 29 de octubre:
+  - Filtros por rol y estado. Tabla con usuario y correo, rol, activo, cuentas (enlace a la cartera filtrada por gestor), rostro (`facialInscrito`) y acciones.
+  - Activar o desactivar, cambiar de rol y restablecer rostro, cada una con confirmación. En la fila propia solo queda restablecer rostro (el backend da `SELF_MODIFICATION`).
+  - Si un gestor tiene cuentas, desactivarlo o cambiarle el rol no llama a la API: avisa y preselecciona el gestor en "Reasignar cuenta" (gestor actual → cuenta → nuevo gestor o sin asignar, con `PATCH /cuentas/:id/asignacion`).
+  - Sin botón "Invitar usuario": `POST /usuarios` sigue pendiente.
+- Pantalla 12, `src/pages/RegistrarMovimiento.jsx` (`/cuentas/:id/movimiento`, solo administrador; botón "Nuevo movimiento" en el detalle de cuenta), 29 de octubre:
+  - Tipo, importe positivo, fecha efectiva, pago de origen (solo reembolso y reversión) y motivo (máx. 500).
+  - Valida antes de enviar lo mismo que el trigger: fecha entre el acuerdo (o el pago de origen) y hoy, abono no mayor al saldo, y reversión no mayor a lo que queda por revertir del pago. Solo se ofrecen pagos con monto pendiente de revertir.
+  - Panel "Efecto previsto" (saldo anterior, impacto con signo y saldo estimado), paso de revisión y confirmación. Al terminar vuelve al detalle en la pestaña Movimientos con el aviso del nuevo saldo (`Cuenta.jsx` acepta `state.pestana`).
 - `ErrorFormulario` (`comunes.jsx`) ya no muestra el nombre técnico de la restricción: un CURP, RFC o referencia externa repetidos dan un mensaje legible.
 
 ### Bloque D — Verificación facial obligatoria (28 de octubre)
@@ -95,8 +104,8 @@ Política decidida por el usuario: **obligatoria para todos**. Tras Neon Auth, q
   - El seed no conoce el deudor 13 ni la cuenta 15: `--reset` los borra porque vacía las tablas de negocio.
 
 ## Pendiente (prioridad para la demo)
-1. **Probar la verificación facial con una cámara real** (el usuario, con su propio rostro). Al primer acceso cada cuenta pide registrar el rostro.
-2. **Bloque C (frontend), resto:** pantallas de administrador 12 (movimiento de saldo) y 13 (gestión de usuarios, con el botón de restablecimiento facial y la columna `facialInscrito`).
+1. **Probar la pantalla 12 en el navegador:** un cargo, un abono, un abono mayor al saldo (bloqueado) y una reversión con su pago de origen.
+2. ~~Verificación facial con cámara real~~: hecha por el usuario. El 29 de octubre el administrador principal, gestor1 y gestor2 tienen rostro registrado; `admin@solvia.com` no.
 3. **Bloque E (dashboard):** Recharts sobre `/panel/resumen` y `/panel/prioridades`, y la lista de cuentas con `orden=prioridad`. El backend ya está listo.
 4. Opcional: detección de rostro en el navegador (`face-api.js` o MediaPipe, como dice `docs/definicion_proyecto.md`), para avisar antes de enviar la captura. Hoy la detección la hace solo el microservicio.
 5. `POST /usuarios` (invitación en Neon Auth). Si no da tiempo, los usuarios se crean desde la consola o el MCP de Neon.
@@ -219,6 +228,9 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
   - En la base: 3 vectores, 6,144 bytes cifrados, IV de 12 y etiqueta de 16 bytes; la bitácora registra cada resultado.
   - Backend: `tsc` y `npm run lint` limpios, salvo los specs viejos ya conocidos. Frontend: `npm run lint` y `npm run build`, sin errores.
   - **No verificado:** cámara real, el restablecimiento por un administrador verificado (requiere que el administrador registre su rostro) y la expiración de la cookie a los 30 min durante el uso.
+- **Pantallas 12 y 13 (29 de octubre):** `npm run lint` y `npm run build` del frontend, sin errores.
+  - Pantalla 13 probada por el usuario en su navegador: listado, aviso al desactivar un gestor con cuentas y reasignación.
+  - **No verificado:** la pantalla 12 en el navegador (necesita el rostro del administrador).
 - **No verificado:** tests unitarios (por decisión, el bloque B se hizo sin tests).
 
 ## Decisiones y desvíos
@@ -267,6 +279,6 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - Probar la verificación facial con cámara de forma automática: Chrome con `--use-fake-device-for-media-stream --use-file-for-fake-video-capture=<foto>.y4m`. Los scripts del 28 de octubre (`facial-e2e.mjs`, `facial-http.mjs`, `calibrar.py`, `a_y4m.py`) estaban en el scratchpad de esa sesión.
 
 Orden propuesto (entrega el 30 de octubre):
-1. Que el usuario pruebe la verificación facial con su cámara.
-2. Pantallas 12 (movimiento de saldo) y 13 (gestión de usuarios, con restablecimiento facial).
-3. Bloque E (Recharts).
+1. Que el usuario pruebe la pantalla 12 (movimiento de saldo) en su navegador.
+2. Bloque E (Recharts sobre `/panel/resumen` y `/panel/prioridades`).
+3. Si hay tiempo: detección de rostro en el navegador, `POST /usuarios` o el bloque F.

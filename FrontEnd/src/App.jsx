@@ -9,8 +9,10 @@ import Deudores from './pages/Deudores.jsx';
 import Login from './pages/Login.jsx';
 import NuevaCuenta from './pages/NuevaCuenta.jsx';
 import Panel from './pages/Panel.jsx';
+import RegistrarMovimiento from './pages/RegistrarMovimiento.jsx';
 import RegistrarPago from './pages/RegistrarPago.jsx';
 import RegistroFacial from './pages/RegistroFacial.jsx';
+import Usuarios from './pages/Usuarios.jsx';
 import VerificaRostro from './pages/VerificaRostro.jsx';
 import { SesionProvider, useSesion } from './sesion/SesionContext.jsx';
 
@@ -93,6 +95,22 @@ export default function App() {
               element={
                 <Protegida roles={['gestor']}>
                   <RegistrarPago />
+                </Protegida>
+              }
+            />
+            <Route
+              path="cuentas/:id/movimiento"
+              element={
+                <Protegida roles={['administrador']}>
+                  <RegistrarMovimiento />
+                </Protegida>
+              }
+            />
+            <Route
+              path="usuarios"
+              element={
+                <Protegida roles={['administrador']}>
+                  <Usuarios />
                 </Protegida>
               }
             />

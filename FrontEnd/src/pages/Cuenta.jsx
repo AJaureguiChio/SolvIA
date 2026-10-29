@@ -18,7 +18,7 @@ export default function Cuenta() {
   const { usuario } = useSesion();
   const location = useLocation();
   const esAdmin = usuario.rol === 'administrador';
-  const [pestana, setPestana] = useState('plan');
+  const [pestana, setPestana] = useState(location.state?.pestana ?? 'plan');
   const { cargando, datos: cuenta, error, recargar } = useCarga(() => api(`/cuentas/${id}`), [id]);
 
   const volver = (
@@ -42,6 +42,11 @@ export default function Cuenta() {
         {puedePagar && (
           <Link to={`/cuentas/${cuenta.id}/pago`} className="btn primary">
             Registrar pago
+          </Link>
+        )}
+        {esAdmin && (
+          <Link to={`/cuentas/${cuenta.id}/movimiento`} className="btn primary">
+            Nuevo movimiento
           </Link>
         )}
       </Titulo>
