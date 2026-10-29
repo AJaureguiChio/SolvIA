@@ -618,7 +618,6 @@ paths:
     get:
       tags: [Usuarios]
       summary: Listar usuarios (administrador)
-      description: '`POST /usuarios` (alta/invitación en Neon Auth) aún no está implementado.'
       operationId: listarUsuarios
       parameters:
         - name: rol
@@ -640,6 +639,52 @@ paths:
                     items: { $ref: '#/components/schemas/Usuario' }
         '401': { $ref: '#/components/responses/NoAutenticado' }
         '403': { $ref: '#/components/responses/Prohibido' }
+    post:
+      tags: [Usuarios]
+      summary: Crear usuario (administrador)
+      description: |
+        Crea la identidad en Neon Auth (registro con correo y contraseña temporal) y su perfil en SolvIA.
+        Si el correo ya tiene identidad en Neon Auth sin perfil, solo crea el perfil y la contraseña se ignora
+        (`identidadNueva: false`); por eso reintentar tras un fallo no duplica la identidad.
+        El usuario registra su rostro en su primer acceso.
+      operationId: crearUsuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, email, password, rol]
+              properties:
+                nombre: { type: string, maxLength: 100 }
+                email: { type: string, format: email, maxLength: 256 }
+                password: { type: string, minLength: 8, maxLength: 128, description: Contraseña temporal }
+                rol: { $ref: '#/components/schemas/Rol' }
+            example: { nombre: Gestor Tres, email: gestor3@solvia.demo, password: Temporal2026x, rol: gestor }
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Usuario'
+                  - type: object
+                    properties:
+                      identidadNueva: { type: boolean, description: false si se reutilizó una identidad de Neon Auth sin perfil }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '409':
+          description: El correo ya pertenece a un usuario de SolvIA (`DUPLICATE_IDENTIFIER`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: Neon Auth no respondió (`AUTH_SERVICE_UNAVAILABLE`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /usuarios/{id}:
     parameters:

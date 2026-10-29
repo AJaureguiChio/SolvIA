@@ -1,9 +1,11 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { UsuarioActual } from '../auth/guards/neon-auth/neon-auth.guard.js';
 import { ApiError } from '../common/api-error.js';
 import { DatabaseService } from '../database/database.service.js';
 import type {
   ActualizarUsuarioDto,
+  CrearUsuarioDto,
   ListarUsuariosDto,
 } from './usuarios.dto.js';
 
@@ -18,7 +20,106 @@ const SELECT_USUARIO = `
 
 @Injectable()
 export class UsuariosService {
-  constructor(private readonly database: DatabaseService) {}
+  private readonly logger = new Logger(UsuariosService.name);
+  private readonly urlNeonAuth: string;
+  // Neon Auth rechaza peticiones sin Origin de un dominio de confianza.
+  private readonly origen: string;
+
+  constructor(
+    config: ConfigService,
+    private readonly database: DatabaseService,
+  ) {
+    this.urlNeonAuth = config.getOrThrow<string>('NEON_AUTH_BASE_URL');
+    this.origen = (
+      config.get<string>('FRONTEND_ORIGIN') ?? 'http://localhost:5173'
+    ).split(',')[0];
+  }
+
+  // Si falla el alta del perfil despues de crear la identidad, reintentar con
+  // el mismo correo reutiliza la identidad: no se duplica.
+  async crear(dto: CrearUsuarioDto) {
+    const email = dto.email.trim().toLowerCase();
+    let id = await this.identidadPorCorreo(email);
+    const identidadNueva = !id;
+    if (!id) id = await this.registrarIdentidad(dto, email);
+
+    try {
+      await this.database.query(
+        `INSERT INTO public.perfiles_usuario (id, rol, activo)
+         VALUES ($1::uuid, $2, true)`,
+        [id, dto.rol],
+      );
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        throw new ApiError(
+          HttpStatus.CONFLICT,
+          'DUPLICATE_IDENTIFIER',
+          'Ya existe un usuario con ese correo',
+        );
+      }
+      throw error;
+    }
+    return { ...(await this.obtener(id)), identidadNueva };
+  }
+
+  private async identidadPorCorreo(email: string) {
+    const { rows } = await this.database.query(
+      `SELECT id::text AS id FROM neon_auth."user" WHERE lower(email) = $1`,
+      [email],
+    );
+    return (rows[0] as { id: string } | undefined)?.id;
+  }
+
+  // Mismo registro de correo y contrasena que usa Neon Auth (Better Auth).
+  // La sesion que devuelve para el nuevo usuario se descarta.
+  private async registrarIdentidad(dto: CrearUsuarioDto, email: string) {
+    let respuesta: Response;
+    try {
+      respuesta = await fetch(`${this.urlNeonAuth}/sign-up/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: this.origen },
+        body: JSON.stringify({
+          name: dto.nombre.trim(),
+          email,
+          password: dto.password,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch {
+      throw this.authNoDisponible();
+    }
+
+    const cuerpo = (await respuesta.json().catch(() => null)) as {
+      user?: { id?: string };
+      code?: string;
+      message?: string;
+    } | null;
+    if (respuesta.ok && cuerpo?.user?.id) return cuerpo.user.id;
+
+    // Carrera: otra peticion creo la identidad entre la consulta y el registro.
+    if (cuerpo?.code === 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL') {
+      const id = await this.identidadPorCorreo(email);
+      if (id) return id;
+    }
+    if (respuesta.status === 400 || respuesta.status === 422) {
+      throw ApiError.entradaInvalida(
+        cuerpo?.message ?? 'Neon Auth rechazó los datos del usuario',
+        { neonAuth: [cuerpo?.code ?? `HTTP ${respuesta.status}`] },
+      );
+    }
+    this.logger.error(
+      `sign-up de Neon Auth respondio ${respuesta.status} ${cuerpo?.code ?? ''}`,
+    );
+    throw this.authNoDisponible();
+  }
+
+  private authNoDisponible() {
+    return new ApiError(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      'AUTH_SERVICE_UNAVAILABLE',
+      'No fue posible crear la cuenta en Neon Auth. Inténtalo de nuevo.',
+    );
+  }
 
   async listar(filtros: ListarUsuariosDto) {
     const { rows } = await this.database.query(

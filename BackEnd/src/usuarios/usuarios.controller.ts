@@ -11,11 +11,13 @@ import {
 import { Protegido, Roles, Usuario } from '../auth/decoradores.js';
 import type { UsuarioActual } from '../auth/guards/neon-auth/neon-auth.guard.js';
 import { FacialService } from '../facial/facial.service.js';
-import { ActualizarUsuarioDto, ListarUsuariosDto } from './usuarios.dto.js';
+import {
+  ActualizarUsuarioDto,
+  CrearUsuarioDto,
+  ListarUsuariosDto,
+} from './usuarios.dto.js';
 import { UsuariosService } from './usuarios.service.js';
 
-// El alta de identidades (POST /usuarios) queda pendiente: depende del
-// mecanismo de invitaciones de Neon Auth.
 @Controller('usuarios')
 @Protegido()
 @Roles('administrador')
@@ -28,6 +30,13 @@ export class UsuariosController {
   @Get()
   listar(@Query() filtros: ListarUsuariosDto) {
     return this.usuariosService.listar(filtros);
+  }
+
+  // Crea la identidad en Neon Auth (o reutiliza una sin perfil) y su perfil.
+  // El usuario registra su rostro en el primer acceso.
+  @Post()
+  crear(@Body() dto: CrearUsuarioDto) {
+    return this.usuariosService.crear(dto);
   }
 
   @Get(':id')

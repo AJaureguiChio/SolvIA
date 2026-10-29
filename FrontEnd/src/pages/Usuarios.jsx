@@ -45,6 +45,7 @@ export default function Usuarios() {
   const [gestorOrigen, setGestorOrigen] = useState('');
   // Cambia tras cada acción para que la sección de reasignación recargue sus listas.
   const [version, setVersion] = useState(0);
+  const [creando, setCreando] = useState(false);
 
   const { cargando, datos, error, recargar } = useCarga(
     () => api('/usuarios', { params: { rol: filtros.rol, activo: filtros.activo } }),
@@ -87,7 +88,32 @@ export default function Usuarios() {
 
   return (
     <>
-      <Titulo titulo="Usuarios y asignaciones" subtitulo="El administrador administra el rol, el estado y el rostro de cada perfil." />
+      <Titulo titulo="Usuarios y asignaciones" subtitulo="El administrador administra el rol, el estado y el rostro de cada perfil.">
+        {!creando && (
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => {
+              setCreando(true);
+              setAviso(null);
+            }}
+          >
+            Nuevo usuario
+          </button>
+        )}
+      </Titulo>
+
+      {creando && (
+        <NuevoUsuario
+          onCancelar={() => setCreando(false)}
+          onCreado={(texto) => {
+            setCreando(false);
+            setAviso({ tipo: 'ok', texto });
+            recargar();
+            setVersion((v) => v + 1);
+          }}
+        />
+      )}
 
       <form className="filters" onSubmit={(ev) => ev.preventDefault()}>
         <label className="field">
@@ -212,9 +238,87 @@ export default function Usuarios() {
       />
       <div className="note">
         Antes de desactivar a un gestor o cambiarlo de rol, reasigna todas sus cuentas. Cada cambio queda en el historial de
-        asignaciones de la cuenta. Las altas de usuarios se hacen desde Neon Auth.
+        asignaciones de la cuenta. Cada usuario nuevo registra su rostro en su primer acceso.
       </div>
     </>
+  );
+}
+
+// Contraseña temporal legible, sin caracteres que se confundan (0/O, 1/l).
+function contrasenaTemporal() {
+  const letras = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const azar = crypto.getRandomValues(new Uint32Array(12));
+  return Array.from(azar, (n) => letras[n % letras.length]).join('');
+}
+
+function NuevoUsuario({ onCancelar, onCreado }) {
+  const [datos, setDatos] = useState({ nombre: '', email: '', password: contrasenaTemporal(), rol: 'gestor' });
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState(null);
+  const cambiar = (campo) => (ev) => setDatos({ ...datos, [campo]: ev.target.value });
+
+  async function guardar(ev) {
+    ev.preventDefault();
+    setGuardando(true);
+    setError(null);
+    try {
+      const creado = await api('/usuarios', { method: 'POST', body: { ...datos, nombre: datos.nombre.trim(), email: datos.email.trim() } });
+      onCreado(
+        creado.identidadNueva
+          ? `Se creó a ${nombreUsuario(creado)} (${creado.email}) con la contraseña temporal ${datos.password}. Compártela por un medio seguro; al entrar registrará su rostro.`
+          : `${creado.email} ya tenía cuenta en Neon Auth: se le asignó el rol y conserva su contraseña. Al entrar registrará su rostro.`,
+      );
+    } catch (e) {
+      setError(e);
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <form className="card" style={{ marginBottom: 15 }} onSubmit={guardar}>
+      <h3>Nuevo usuario</h3>
+      <ErrorFormulario error={error} />
+      <fieldset disabled={guardando} style={{ border: 0, padding: 0, margin: 0 }}>
+        <div className="form-grid">
+          <label className="field">
+            Nombre
+            <input className="input" required maxLength={100} value={datos.nombre} onChange={cambiar('nombre')} />
+          </label>
+          <label className="field">
+            Correo
+            <input className="input" type="email" required maxLength={256} value={datos.email} onChange={cambiar('email')} />
+          </label>
+          <label className="field">
+            Contraseña temporal
+            <span className="row" style={{ gap: 6, flexWrap: 'nowrap' }}>
+              <input className="input" required minLength={8} maxLength={128} value={datos.password} onChange={cambiar('password')} />
+              <button type="button" className="btn" onClick={() => setDatos({ ...datos, password: contrasenaTemporal() })}>
+                Generar
+              </button>
+            </span>
+          </label>
+          <label className="field">
+            Rol
+            <select className="input" value={datos.rol} onChange={cambiar('rol')}>
+              <option value="gestor">Gestor</option>
+              <option value="administrador">Administrador</option>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+      <div className="notice">
+        Se crea la cuenta en Neon Auth y el perfil en SolvIA. Si el correo ya tiene cuenta en Neon Auth sin perfil, solo se le
+        asigna el rol y conserva su contraseña.
+      </div>
+      <div className="row">
+        <button type="submit" className="btn primary" disabled={guardando}>
+          {guardando ? 'Creando…' : 'Crear usuario'}
+        </button>
+        <button type="button" className="btn" disabled={guardando} onClick={onCancelar}>
+          Cancelar
+        </button>
+      </div>
+    </form>
   );
 }
 

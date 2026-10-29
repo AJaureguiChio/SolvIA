@@ -29,6 +29,7 @@ La verificación facial es obligatoria para todos los usuarios (AGENTS.md, decis
 - Módulos `src/deudores`, `src/cuentas`, `src/pagos`, `src/movimientos`, `src/panel` y `src/usuarios` (dto, service, controller).
   - Endpoints: ver `docs/openapi.yaml`.
   - El panel ya calcula los datos del bloque E: `/panel/resumen` (totales, morosidad por rangos, pagos por mes frente a lo esperado, próximos vencimientos) y `/panel/prioridades` (ranking por P con sus componentes).
+- `POST /usuarios` (29 de octubre; `usuarios.service.ts`): el backend hace el mismo `sign-up/email` de Neon Auth (con `Origin` = primer valor de `FRONTEND_ORIGIN`) y luego inserta el perfil. Si el correo ya tiene identidad sin perfil, solo crea el perfil (`identidadNueva: false`, la contraseña se ignora); así un reintento no duplica la identidad. Correo de un usuario de SolvIA: 409 `DUPLICATE_IDENTIFIER`; Neon Auth caído: 503 `AUTH_SERVICE_UNAVAILABLE`. No usa la API de Neon (`/auth/users`), que crea usuarios sin contraseña. Documentado en `docs/openapi.yaml`.
 - `src/database/database.service.ts`: las fechas se leen como texto y la zona horaria se fija en la conexión.
 - OpenAPI 3.0.3 en dos módulos para Apidog (cada uno con su servidor):
   - `docs/openapi.yaml`: los 19 endpoints de la API de SolvIA.
@@ -60,7 +61,7 @@ La verificación facial es obligatoria para todos los usuarios (AGENTS.md, decis
   - Filtros por rol y estado. Tabla con usuario y correo, rol, activo, cuentas (enlace a la cartera filtrada por gestor), rostro (`facialInscrito`) y acciones.
   - Activar o desactivar, cambiar de rol y restablecer rostro, cada una con confirmación. En la fila propia solo queda restablecer rostro (el backend da `SELF_MODIFICATION`).
   - Si un gestor tiene cuentas, desactivarlo o cambiarle el rol no llama a la API: avisa y preselecciona el gestor en "Reasignar cuenta" (gestor actual → cuenta → nuevo gestor o sin asignar, con `PATCH /cuentas/:id/asignacion`).
-  - Sin botón "Invitar usuario": `POST /usuarios` sigue pendiente.
+  - Botón "Nuevo usuario" (`POST /usuarios`): nombre, correo, contraseña temporal (botón "Generar", 12 caracteres sin ambiguos) y rol. El aviso muestra la contraseña temporal una sola vez.
 - Pantalla 12, `src/pages/RegistrarMovimiento.jsx` (`/cuentas/:id/movimiento`, solo administrador; botón "Nuevo movimiento" en el detalle de cuenta), 29 de octubre:
   - Tipo, importe positivo, fecha efectiva, pago de origen (solo reembolso y reversión) y motivo (máx. 500).
   - Valida antes de enviar lo mismo que el trigger: fecha entre el acuerdo (o el pago de origen) y hoy, abono no mayor al saldo, y reversión no mayor a lo que queda por revertir del pago. Solo se ofrecen pagos con monto pendiente de revertir.
@@ -117,7 +118,7 @@ Política decidida por el usuario: **obligatoria para todos**. Tras Neon Auth, q
 1. **Revisar el panel con datos reales** (bloque E) como administrador y como gestor.
 2. ~~Verificación facial con cámara real~~ y ~~pantallas 12 y 13~~: probadas por el usuario. El 29 de octubre el administrador principal, gestor1 y gestor2 tienen rostro registrado; `admin@solvia.com` no.
 3. Opcional: detección de rostro en el navegador (`face-api.js` o MediaPipe, como dice `docs/definicion_proyecto.md`), para avisar antes de enviar la captura. Hoy la detección la hace solo el microservicio.
-4. `POST /usuarios` (invitación en Neon Auth). Si no da tiempo, los usuarios se crean desde la consola o el MCP de Neon.
+4. Probar el alta de un usuario desde la pantalla 13 (crea una identidad real en Neon Auth de `desarrollo`).
 5. **Bloque F (opcional):** reporte ejecutivo con métricas, texto generado por LLM y PDF para el administrador.
 
 ## Cómo correrlo
@@ -240,6 +241,8 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - **Pantallas 12 y 13 (29 de octubre):** `npm run lint` y `npm run build` del frontend, sin errores.
   - Pantalla 13 probada por el usuario en su navegador: listado, aviso al desactivar un gestor con cuentas y reasignación.
   - Pantalla 12 probada por el usuario en su navegador el 29 de octubre.
+- **`POST /usuarios` (29 de octubre):** `npm run lint` y `npm run build` del backend y del frontend, sin errores (`tsc` solo marca los specs viejos ya conocidos). El `sign-up` de Neon Auth con la URL y el `Origin` del backend respondió 400 `PASSWORD_TOO_SHORT` con una contraseña corta (no crea nada). La búsqueda por correo en `neon_auth."user"` responde en `desarrollo`.
+  - **No verificado:** el alta completa (crea una identidad real en Neon Auth; la hace el usuario desde la pantalla 13) ni Redocly sobre el YAML (no está instalado localmente).
 - **Bloque E (29 de octubre):** `npm run lint` y `npm run build`, sin errores ni avisos. Recharts se carga diferido (`lazy` en `Panel.jsx`): `Graficas` pesa 390 kB y el bundle principal 455 kB (antes 845 kB en uno solo, con el aviso de 500 kB).
   - Las cuatro gráficas se renderizaron con datos de ejemplo en una página temporal (ya borrada), con Chrome headless a 1280 y 390 px de ancho: sin errores de consola, tooltip correcto al pasar el cursor y etiquetas en tinta `#27313a`.
   - **No verificado:** el panel con datos reales en el navegador (necesita sesión con rostro).
@@ -255,7 +258,8 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - **Movimientos:** el cliente envía siempre un monto positivo y el backend aplica el signo según el tipo.
 - **Prioridad P** se calcula en SQL. Solo `/panel/prioridades` filtra P > 0; `/cuentas?orden=prioridad` muestra todas.
 - **`pagosPorPeriodo`** cuenta los pagos brutos, incluido uno que después se revirtió (SOL-008). Pasar a monto neto es un cambio pequeño si se prefiere.
-- **Queda fuera por ahora:** `POST /usuarios` (depende de las invitaciones de Neon Auth) y los reportes (bloque F).
+- **Alta de usuarios** (29 de octubre, decisión del usuario): el administrador crea identidad y perfil desde la pantalla 13 con contraseña temporal, en lugar de vincular solo identidades existentes.
+- **Queda fuera por ahora:** los reportes (bloque F).
 - **Índice de morosidad** (27 de octubre): cuentas atrasadas entre cuentas vigentes (sin liquidar), igual que "Al corriente". Antes dividía entre todas las cuentas. Cambiado en `panel.service.ts` y en `docs/openapi.yaml`.
 - **Seed:** `--reset` es opt-in y nunca toca `perfiles_usuario` ni `neon_auth`.
 
