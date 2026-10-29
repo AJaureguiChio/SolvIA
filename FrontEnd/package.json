@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@neondatabase/auth": "^0.7.0-beta",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.9",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.5.0",

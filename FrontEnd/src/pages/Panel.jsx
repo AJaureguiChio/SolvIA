@@ -31,6 +31,11 @@ export default function Panel() {
       titulo={esAdmin ? 'Panel del administrador' : 'Mi panel'}
       subtitulo={esAdmin ? 'Indicadores de todas las cuentas.' : 'Solo cuentas asignadas a ti.'}
     >
+      {esAdmin && (
+        <Link to="/reportes/nuevo" className="btn">
+          Generar reporte
+        </Link>
+      )}
       <Link to="/cuentas" className="btn primary">
         {esAdmin ? 'Ver cartera' : 'Ver mis cuentas'}
       </Link>

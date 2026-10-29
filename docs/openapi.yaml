@@ -34,6 +34,7 @@ tags:
   - name: Movimientos
   - name: Panel
   - name: Usuarios
+  - name: Reportes
 
 security:
   - bearerAuth: []
@@ -765,6 +766,198 @@ paths:
         '403': { $ref: '#/components/responses/Prohibido' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
 
+  /reportes/previsualizaciones:
+    post:
+      tags: [Reportes]
+      summary: Borrador de reporte ejecutivo con IA (administrador)
+      description: |
+        Calcula las métricas del periodo y pide a Gemini el texto explicativo. Gemini consulta las métricas por MCP
+        (servidor MCP de SolvIA en el backend, herramientas `resumen_cartera`, `cuentas_prioritarias` y
+        `cumplimiento_por_gestor`, sin nombres de deudores). No escribe en `reportes`. Tarda unos 20 s.
+        Ante 503/429 de Gemini reintenta y usa el modelo de respaldo (`GEMINI_MODEL_RESPALDO`).
+      operationId: previsualizarReporte
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [desde, hasta]
+              properties:
+                desde: { $ref: '#/components/schemas/Fecha' }
+                hasta: { $ref: '#/components/schemas/Fecha' }
+                indicaciones: { type: string, maxLength: 500, description: Enfoque o tono para el LLM }
+      responses:
+        '201':
+          description: Borrador para revisión
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  periodoDesde: { $ref: '#/components/schemas/Fecha' }
+                  periodoHasta: { $ref: '#/components/schemas/Fecha' }
+                  modelo: { type: string, example: gemini-3.5-flash }
+                  herramientasConsultadas: { type: array, items: { type: string } }
+                  texto: { type: string, description: 'Secciones Resumen ejecutivo, Tendencias, Riesgos y Recomendaciones, cada una con encabezado "## "' }
+                  resumen: { type: object, description: Misma forma que GET /panel/resumen }
+                  prioridades: { type: array, items: { type: object }, description: Misma forma que GET /panel/prioridades }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '503':
+          description: Falta `GEMINI_API_KEY` o Gemini no respondió (`LLM_UNAVAILABLE`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /reportes:
+    get:
+      tags: [Reportes]
+      summary: Listar reportes
+      description: El administrador ve todos; el gestor solo los que se le entregaron.
+      operationId: listarReportes
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Página de reportes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Reporte'
+                        - type: object
+                          properties:
+                            destinatarios: { type: integer }
+                            entregados: { type: integer }
+                  total: { type: integer }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+    post:
+      tags: [Reportes]
+      summary: Guardar reporte y destinatarios (administrador)
+      description: |
+        Recibe el PDF armado en el navegador (jsPDF) y lo guarda una sola vez en `reportes.archivo_pdf` junto con sus
+        destinatarios, en una transacción. Con `entregar=true` la entrega queda confirmada en el mismo alta.
+        Los destinatarios deben ser gestores activos. El reporte no se edita ni se elimina.
+      operationId: crearReporte
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [pdf, titulo, periodoDesde, periodoHasta, destinatarioIds]
+              properties:
+                pdf: { type: string, format: binary, description: 'application/pdf, máximo 10 MB' }
+                titulo: { type: string, maxLength: 200 }
+                periodoDesde: { $ref: '#/components/schemas/Fecha' }
+                periodoHasta: { $ref: '#/components/schemas/Fecha' }
+                destinatarioIds: { type: string, description: Arreglo JSON de UUID de gestores }
+                entregar: { type: boolean }
+      responses:
+        '201':
+          description: Reporte guardado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReporteDetalle' }
+        '400': { $ref: '#/components/responses/EntradaInvalida' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '413':
+          description: El PDF supera 10 MB (`PDF_TOO_LARGE`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '415':
+          description: El archivo no es un PDF (`UNSUPPORTED_MEDIA_TYPE`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: Un destinatario no es un gestor activo (`INVALID_RECIPIENT`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /reportes/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdReporte'
+    get:
+      tags: [Reportes]
+      summary: Detalle de reporte
+      description: El administrador ve todos los destinatarios; el gestor, solo su entrega. Un reporte no entregado al gestor da 404.
+      operationId: obtenerReporte
+      responses:
+        '200':
+          description: Reporte
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReporteDetalle' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /reportes/{id}/pdf:
+    parameters:
+      - $ref: '#/components/parameters/IdReporte'
+    get:
+      tags: [Reportes]
+      summary: Descargar el PDF
+      operationId: descargarReportePdf
+      responses:
+        '200':
+          description: PDF almacenado
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /reportes/{id}/entregas:
+    parameters:
+      - $ref: '#/components/parameters/IdReporte'
+    post:
+      tags: [Reportes]
+      summary: Confirmar entrega (administrador)
+      description: Confirma una sola vez `entregado_en` para destinatarios ya registrados.
+      operationId: entregarReporte
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [usuarioIds]
+              properties:
+                usuarioIds: { type: array, items: { type: string, format: uuid } }
+      responses:
+        '201':
+          description: Entrega confirmada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReporteDetalle' }
+        '401': { $ref: '#/components/responses/NoAutenticado' }
+        '403': { $ref: '#/components/responses/Prohibido' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: La entrega ya estaba confirmada (`DELIVERY_ALREADY_CONFIRMED`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: Algún usuario no es destinatario del reporte (`INVALID_RECIPIENT`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -792,6 +985,11 @@ components:
       name: pageSize
       in: query
       schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    IdReporte:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^[1-9][0-9]*$' }
     FechaCorte:
       name: fechaCorte
       in: query
@@ -1195,6 +1393,30 @@ components:
           properties:
             proporcionVencida: { type: number, description: 'min(vencido/exigible, 1)' }
             factorMora: { type: number, description: 'min(díasMora/30, 1)' }
+
+    Reporte:
+      type: object
+      properties:
+        id: { type: string }
+        titulo: { type: string }
+        periodoDesde: { $ref: '#/components/schemas/Fecha' }
+        periodoHasta: { $ref: '#/components/schemas/Fecha' }
+        generadoEn: { type: string, format: date-time }
+        generadoPor: { $ref: '#/components/schemas/UsuarioRef' }
+        tamanoBytes: { type: integer }
+
+    ReporteDetalle:
+      allOf:
+        - $ref: '#/components/schemas/Reporte'
+        - type: object
+          properties:
+            destinatarios:
+              type: array
+              items:
+                type: object
+                properties:
+                  usuario: { $ref: '#/components/schemas/UsuarioRef' }
+                  entregadoEn: { type: string, format: date-time, nullable: true }
 
     Usuario:
       type: object

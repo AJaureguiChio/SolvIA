@@ -41,6 +41,8 @@ const REGLAS_TRIGGER: [RegExp, number, string][] = [
     422,
     'MOVEMENT_INVALID',
   ],
+  [/destinatario debe ser un gestor/i, 422, 'INVALID_RECIPIENT'],
+  [/entrega pendiente|entrega no puede/i, 409, 'DELIVERY_ALREADY_CONFIRMED'],
   [/inmutable/i, 409, 'IMMUTABLE_RECORD'],
 ];
 

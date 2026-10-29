@@ -149,3 +149,7 @@ tbody tr:nth-child(even) { background: #f9fafb; }
 .medidor { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; }
 .medidor-barra { display: inline-block; width: 48px; height: 6px; border-radius: 3px; background: var(--light); overflow: hidden; }
 .medidor-barra span { display: block; height: 100%; background: #2a78d6; border-radius: 3px; }
+
+/* Bloque F: reportes */
+.checkline { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 6px 0; }
+.captura-grafica { background: #fff; margin-top: 12px; }

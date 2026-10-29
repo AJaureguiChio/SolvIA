@@ -7,5 +7,6 @@ import { DatabaseModule } from '../database/database.module.js';
   imports: [DatabaseModule],
   controllers: [PanelController],
   providers: [PanelService],
+  exports: [PanelService],
 })
 export class PanelModule {}

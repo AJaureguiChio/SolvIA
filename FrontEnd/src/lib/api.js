@@ -24,7 +24,8 @@ function query(params) {
 }
 
 // `body` se envía como JSON y `form` (FormData) como multipart.
-export async function api(ruta, { method = 'GET', params, body, form } = {}) {
+// `archivo: true` devuelve el cuerpo como Blob (p. ej. un PDF).
+export async function api(ruta, { method = 'GET', params, body, form, archivo = false } = {}) {
   const token = await obtenerJwt();
   if (!token) throw new ApiError(401, 'UNAUTHENTICATED', 'La sesión terminó. Vuelve a iniciar sesión.');
 
@@ -45,6 +46,7 @@ export async function api(ruta, { method = 'GET', params, body, form } = {}) {
   }
 
   if (respuesta.status === 204) return null;
+  if (archivo && respuesta.ok) return respuesta.blob();
   const datos = await respuesta.json().catch(() => null);
   if (!respuesta.ok) {
     const e = datos?.error;

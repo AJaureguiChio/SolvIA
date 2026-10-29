@@ -103,8 +103,22 @@ Política decidida por el usuario: **obligatoria para todos**. Tras Neon Auth, q
 - `Panel.jsx` (administrador y gestor, cada uno con su alcance): tendencia de pagos, estado de la cartera con los saldos, morosidad por días de atraso, próximos vencimientos y prioridades. Las tablas de pagos y de morosidad quedan en un "Ver tabla" plegable bajo cada gráfica.
 - La lista de cuentas ya se ordenaba por prioridad (`orden=prioridad`) desde el bloque C.
 
-### Bloque F
-- Sin empezar.
+### Bloque F — Reportes ejecutivos con IA (29 de octubre)
+Decisiones del usuario: el LLM es **Gemini** (`GEMINI_API_KEY` en el `.env`) y la conexión es **MCP real con herramientas**.
+- **Servidor MCP** `BackEnd/src/reportes/mcp/servidor-solvia.ts` (`@modelcontextprotocol/sdk`): herramientas de solo lectura `resumen_cartera` (desde, hasta), `cuentas_prioritarias` (límite) y `cumplimiento_por_gestor`. No entrega nombres de deudores, solo referencias de cuenta. Vive en el proceso del backend y se conecta por `InMemoryTransport`, un servidor y un cliente por petición.
+- **`reportes.service.ts`:**
+  - `POST /reportes/previsualizaciones`: calcula el resumen y las prioridades con `PanelService` y pide el texto a Gemini con `mcpToTool(cliente)` (`@google/genai`, llamada automática a herramientas, máx. 8). Instrucciones: cuatro secciones fijas (`## Resumen ejecutivo`, `## Tendencias`, `## Riesgos`, `## Recomendaciones`), solo cifras de las herramientas y 350 palabras como máximo. No escribe en `reportes`.
+  - Modelo `GEMINI_MODEL` (por defecto `gemini-3.5-flash`). Ante 503 o 429 reintenta una vez y luego usa `GEMINI_MODEL_RESPALDO` (por defecto `gemini-2.5-flash`). Si todo falla: 503 `LLM_UNAVAILABLE`.
+  - `POST /reportes` (multipart, campo `pdf`): valida tipo, cabecera `%PDF-` y 10 MB como máximo (415 / 413 `PDF_TOO_LARGE`) y guarda el reporte y sus destinatarios en una transacción. Con `entregar=true` confirma la entrega en el mismo alta.
+  - `GET /reportes`, `GET /reportes/{id}` y `GET /reportes/{id}/pdf`: el administrador ve todo; el gestor solo lo que se le entregó (lo demás, 404).
+  - `POST /reportes/{id}/entregas`: confirma una sola vez (409 `DELIVERY_ALREADY_CONFIRMED`; un no destinatario da 422 `INVALID_RECIPIENT`).
+  - `api-exception.filter.ts` traduce los mensajes de los triggers de reportes.
+- **Frontend:**
+  - `pages/Reportes.jsx` (pantalla 14, `/reportes`, ambos roles; enlace en la cabecera): lista con periodo, autor, destinatarios y estado de entrega, "Descargar PDF" y "Entregar" (pendientes).
+  - `pages/NuevoReporte.jsx` (pantalla 15, `/reportes/nuevo`, solo administrador; botón "Generar reporte" en el panel): configurar (título, periodo, indicaciones para la IA, gestores destinatarios, confirmar entrega) → redactar con IA → revisar y editar el texto con las gráficas → generar el PDF y guardar.
+  - `lib/pdfReporte.js`: PDF A4 con jsPDF (encabezado, indicadores, secciones del texto con viñetas, gráficas capturadas con html2canvas en JPEG, tabla de prioridades con jspdf-autotable y pie con número de página). jsPDF, autotable y html2canvas se cargan bajo demanda.
+  - `api.js` acepta `archivo: true` para descargar un `Blob`.
+- `docs/openapi.yaml`: rutas de reportes y esquemas `Reporte` y `ReporteDetalle`.
 
 ## En curso
 - **Usuario temporal** `prueba.registro@solvia.demo` (rama `desarrollo`, sin perfil), creado al probar `sign-up`. **No borrarlo:** el usuario pidió conservarlo; sirve para probar el aviso de usuario sin perfil.
@@ -119,7 +133,7 @@ Política decidida por el usuario: **obligatoria para todos**. Tras Neon Auth, q
 2. ~~Verificación facial con cámara real~~ y ~~pantallas 12 y 13~~: probadas por el usuario. El 29 de octubre el administrador principal, gestor1 y gestor2 tienen rostro registrado; `admin@solvia.com` no.
 3. Opcional: detección de rostro en el navegador (`face-api.js` o MediaPipe, como dice `docs/definicion_proyecto.md`), para avisar antes de enviar la captura. Hoy la detección la hace solo el microservicio.
 4. Probar el alta de un usuario desde la pantalla 13 (crea una identidad real en Neon Auth de `desarrollo`).
-5. **Bloque F (opcional):** reporte ejecutivo con métricas, texto generado por LLM y PDF para el administrador.
+5. **Probar el bloque F en el navegador:** redactar un borrador, guardar el PDF con destinatarios, entregar y descargarlo como gestor. Cada reporte guardado es **permanente** (inmutable) en `desarrollo`.
 
 ## Cómo correrlo
 
@@ -144,6 +158,8 @@ Todas las variables van en el `.env` de la raíz del repositorio, que no se vers
 | `FACE_JWT_SECRET` | Firma de la cookie `solvia_face` |
 | `FACE_THRESHOLD`, `FACE_MIN_SIZE` | Opcionales del microservicio (0.60 y 80 px) |
 | `FACE_COOKIE_SECURE` | Opcional; `true` para `SameSite=None; Secure` con dominios distintos |
+| `GEMINI_API_KEY` | Clave de Gemini para redactar los reportes (bloque F) |
+| `GEMINI_MODEL`, `GEMINI_MODEL_RESPALDO` | Opcionales; por defecto `gemini-3.5-flash` y `gemini-2.5-flash` |
 
 Desde la raíz del repositorio, cada módulo arranca con su script (en consolas separadas):
 
@@ -246,6 +262,12 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - **Bloque E (29 de octubre):** `npm run lint` y `npm run build`, sin errores ni avisos. Recharts se carga diferido (`lazy` en `Panel.jsx`): `Graficas` pesa 390 kB y el bundle principal 455 kB (antes 845 kB en uno solo, con el aviso de 500 kB).
   - Las cuatro gráficas se renderizaron con datos de ejemplo en una página temporal (ya borrada), con Chrome headless a 1280 y 390 px de ancho: sin errores de consola, tooltip correcto al pasar el cursor y etiquetas en tinta `#27313a`.
   - **No verificado:** el panel con datos reales en el navegador (necesita sesión con rostro).
+- **Bloque F (29 de octubre):** backend (`tsc`, `npm run lint` y `npm run build`) y frontend (`npm run lint` y `npm run build`) sin errores; ningún archivo del bundle pasa de 500 kB.
+  - Borrador real con el contexto Nest compilado (sin HTTP): en 21 s Gemini (`gemini-3.5-flash`) llamó por MCP a las tres herramientas y devolvió las cuatro secciones con cifras de la cartera.
+  - Más tarde Google respondió 503 ("high demand") a los dos modelos: el reintento y el respaldo funcionaron y la API respondió 503 `LLM_UNAVAILABLE`.
+  - PDF generado en Chrome headless con métricas reales: 2 páginas y 103 KB. Primero faltaban barras y líneas (html2canvas no resuelve los `clip-path` de Recharts; ahora se quitan en la copia capturada) y pesaba 4.6 MB en PNG (ahora es JPEG).
+  - SQL de alta y entrega con los triggers reales, dentro de una transacción **revertida**: alta del reporte con el PDF de 105,533 bytes, destinatario gestor (1 fila), un administrador como destinatario es rechazado, entrega confirmada (1) y repetida rechazada, DELETE rechazado (inmutable) y el PDF leído de vuelta empieza con `%PDF-`. Después, la lista sigue vacía (0 reportes).
+  - **No verificado:** el recorrido completo en el navegador con sesión (redactar, guardar, entregar y descargar como gestor) ni Redocly sobre el YAML.
 - **No verificado:** tests unitarios (por decisión, el bloque B se hizo sin tests).
 
 ## Decisiones y desvíos
@@ -259,7 +281,8 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - **Prioridad P** se calcula en SQL. Solo `/panel/prioridades` filtra P > 0; `/cuentas?orden=prioridad` muestra todas.
 - **`pagosPorPeriodo`** cuenta los pagos brutos, incluido uno que después se revirtió (SOL-008). Pasar a monto neto es un cambio pequeño si se prefiere.
 - **Alta de usuarios** (29 de octubre, decisión del usuario): el administrador crea identidad y perfil desde la pantalla 13 con contraseña temporal, en lugar de vincular solo identidades existentes.
-- **Queda fuera por ahora:** los reportes (bloque F).
+- **Reportes** (29 de octubre): el PDF lo arma el navegador con jsPDF (como pide `definicion_proyecto.md`) y el backend lo valida y lo guarda en `reportes.archivo_pdf` (como pide el contrato). La previsualización no se guarda en el servidor: el borrador vive en la pantalla hasta que se guarda el PDF; el backend no vuelve a comprobar que las cifras del PDF coincidan con la base.
+- **LLM vía MCP:** el servidor MCP está dentro del backend (transporte en memoria), no es un proceso aparte. Gemini decide qué herramientas llamar; el backend registra cuáles usó (`herramientasConsultadas`).
 - **Índice de morosidad** (27 de octubre): cuentas atrasadas entre cuentas vigentes (sin liquidar), igual que "Al corriente". Antes dividía entre todas las cuentas. Cambiado en `panel.service.ts` y en `docs/openapi.yaml`.
 - **Seed:** `--reset` es opt-in y nunca toca `perfiles_usuario` ni `neon_auth`.
 
@@ -295,5 +318,5 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - Probar la verificación facial con cámara de forma automática: Chrome con `--use-fake-device-for-media-stream --use-file-for-fake-video-capture=<foto>.y4m`. Los scripts del 28 de octubre (`facial-e2e.mjs`, `facial-http.mjs`, `calibrar.py`, `a_y4m.py`) estaban en el scratchpad de esa sesión.
 
 Orden propuesto (entrega el 30 de octubre):
-1. Que el usuario revise el panel con gráficas en su navegador (administrador y gestor).
-2. Si hay tiempo: detección de rostro en el navegador, `POST /usuarios` o el bloque F.
+1. Que el usuario pruebe los reportes (pantallas 14 y 15) y el alta de usuarios en su navegador, y revise el panel con gráficas.
+2. Si hay tiempo: detección de rostro en el navegador antes de enviar la captura.

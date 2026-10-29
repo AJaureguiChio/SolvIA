@@ -8,10 +8,12 @@ import Deudor from './pages/Deudor.jsx';
 import Deudores from './pages/Deudores.jsx';
 import Login from './pages/Login.jsx';
 import NuevaCuenta from './pages/NuevaCuenta.jsx';
+import NuevoReporte from './pages/NuevoReporte.jsx';
 import Panel from './pages/Panel.jsx';
 import RegistrarMovimiento from './pages/RegistrarMovimiento.jsx';
 import RegistrarPago from './pages/RegistrarPago.jsx';
 import RegistroFacial from './pages/RegistroFacial.jsx';
+import Reportes from './pages/Reportes.jsx';
 import Usuarios from './pages/Usuarios.jsx';
 import VerificaRostro from './pages/VerificaRostro.jsx';
 import { SesionProvider, useSesion } from './sesion/SesionContext.jsx';
@@ -111,6 +113,15 @@ export default function App() {
               element={
                 <Protegida roles={['administrador']}>
                   <Usuarios />
+                </Protegida>
+              }
+            />
+            <Route path="reportes" element={<Reportes />} />
+            <Route
+              path="reportes/nuevo"
+              element={
+                <Protegida roles={['administrador']}>
+                  <NuevoReporte />
                 </Protegida>
               }
             />
