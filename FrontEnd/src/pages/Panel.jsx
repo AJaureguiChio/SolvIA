@@ -1,10 +1,22 @@
+import { lazy, Suspense } from 'react';
 import { Link } from 'react-router';
-import { Cargando, ErrorCarga, PillPlan, Stat, Titulo, Vacio } from '../components/comunes.jsx';
-import { GraficaCartera, GraficaMorosidad, GraficaPagos, MedidorPrioridad } from '../components/Graficas.jsx';
+import { Cargando, ErrorCarga, MedidorPrioridad, PillPlan, Stat, Titulo, Vacio } from '../components/comunes.jsx';
 import { api } from '../lib/api.js';
 import { fecha, importe, nombreUsuario } from '../lib/formato.js';
 import { useCarga } from '../lib/useCarga.js';
 import { useSesion } from '../sesion/SesionContext.jsx';
+
+// Recharts se descarga aparte y solo cuando el panel dibuja las gráficas,
+// para no cargarlo en el resto de la aplicación (y mantener el bundle bajo 500 kB).
+const graficas = () => import('../components/Graficas.jsx');
+const GraficaPagos = lazy(() => graficas().then((m) => ({ default: m.GraficaPagos })));
+const GraficaCartera = lazy(() => graficas().then((m) => ({ default: m.GraficaCartera })));
+const GraficaMorosidad = lazy(() => graficas().then((m) => ({ default: m.GraficaMorosidad })));
+
+// Reserva la altura de la gráfica mientras llega para que la página no salte.
+function EsperaGrafica({ alto, children }) {
+  return <Suspense fallback={<div className="skeleton" style={{ height: alto, margin: 0 }} />}>{children}</Suspense>;
+}
 
 export default function Panel() {
   const { usuario } = useSesion();
@@ -55,7 +67,9 @@ export default function Panel() {
         <div className="card col7">
           <h3>{esAdmin ? 'Tendencia de pagos' : 'Pagos de mis cuentas'}</h3>
           <p className="muted">Pagado por mes frente a las cuotas que vencían en ese mes.</p>
-          <GraficaPagos datos={resumen.pagosPorPeriodo} />
+          <EsperaGrafica alto={240}>
+            <GraficaPagos datos={resumen.pagosPorPeriodo} />
+          </EsperaGrafica>
           <details className="tabla-datos">
             <summary>Ver tabla</summary>
             <div className="tablewrap">
@@ -85,7 +99,9 @@ export default function Panel() {
 
         <div className="card col5">
           <h3>Estado de la cartera</h3>
-          <GraficaCartera totales={t} />
+          <EsperaGrafica alto={180}>
+            <GraficaCartera totales={t} />
+          </EsperaGrafica>
           <p>
             Saldo total: <strong>{importe(t.saldoTotal)}</strong>
           </p>
@@ -100,7 +116,9 @@ export default function Panel() {
         <div className="card col7">
           <h3>Morosidad por días de atraso</h3>
           <p className="muted">Cuentas vigentes según sus días de mora.</p>
-          <GraficaMorosidad datos={resumen.morosidad} />
+          <EsperaGrafica alto={200}>
+            <GraficaMorosidad datos={resumen.morosidad} />
+          </EsperaGrafica>
           <details className="tabla-datos">
             <summary>Ver tabla</summary>
             <div className="tablewrap">

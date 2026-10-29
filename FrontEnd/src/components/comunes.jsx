@@ -113,3 +113,15 @@ export function ErrorFormulario({ error }) {
     </div>
   );
 }
+
+// Medidor de la prioridad P (0–100) para la tabla de prioridades.
+export function MedidorPrioridad({ valor }) {
+  return (
+    <span className="medidor" title={`Prioridad ${valor} de 100`}>
+      <span className="medidor-barra" aria-hidden="true">
+        <span style={{ width: `${Math.min(100, Math.max(0, valor))}%` }} />
+      </span>
+      {valor}
+    </span>
+  );
+}
