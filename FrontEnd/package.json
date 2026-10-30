@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.2.0",
     "@neondatabase/auth": "^0.7.0-beta",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",

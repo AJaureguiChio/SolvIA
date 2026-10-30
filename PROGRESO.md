@@ -134,7 +134,7 @@ Decisiones del usuario: el LLM es **Gemini** (`GEMINI_API_KEY` en el `.env`) y l
 1. **Probar el bloque F en el navegador:** redactar un borrador, guardar el PDF con destinatarios, entregar y descargarlo como gestor. Cada reporte guardado es **permanente** (inmutable) en `desarrollo`.
 2. **Probar el alta de un usuario** desde la pantalla 13 (crea una identidad real en Neon Auth de `desarrollo`).
 3. **Revisar el panel con datos reales** (bloque E) como administrador y como gestor.
-4. Opcional: detección de rostro en el navegador (`face-api.js` o MediaPipe, como dice `docs/definicion_proyecto.md`), para avisar antes de enviar la captura. Hoy la detección la hace solo el microservicio.
+4. ~~Detección de rostro en el navegador~~: hecha el 30 de octubre (MediaPipe, BlazeFace). Falta probarla con la cámara real.
 5. ~~Verificación facial con cámara real~~ y ~~pantallas 12 y 13~~: probadas por el usuario. El 29 de octubre el administrador principal, gestor1 y gestor2 tienen rostro registrado; `admin@solvia.com` no.
 
 ## Cómo correrlo
@@ -270,6 +270,14 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
   - PDF generado en Chrome headless con métricas reales: 2 páginas y 103 KB. Primero faltaban barras y líneas (html2canvas no resuelve los `clip-path` de Recharts; ahora se quitan en la copia capturada) y pesaba 4.6 MB en PNG (ahora es JPEG).
   - SQL de alta y entrega con los triggers reales, dentro de una transacción **revertida**: alta del reporte con el PDF de 105,533 bytes, destinatario gestor (1 fila), un administrador como destinatario es rechazado, entrega confirmada (1) y repetida rechazada, DELETE rechazado (inmutable) y el PDF leído de vuelta empieza con `%PDF-`. Después, la lista sigue vacía (0 reportes).
   - **No verificado:** el recorrido completo en el navegador con sesión (redactar, guardar, entregar y descargar como gestor) ni Redocly sobre el YAML.
+- **Detección en el navegador (30 de octubre):** `npm run lint` y `npm run build` sin errores ni avisos. `Camara.jsx` en una página Vite temporal (ya borrada) con Chrome headless y cámara simulada (`.y4m`):
+  - Un rostro de frente (Bradley Cooper): "Rostro detectado.", 1 recuadro verde y botón habilitado. La primera carga del WASM tardó unos 20 s; las siguientes, de 3 a 7 s.
+  - Dos rostros cercanos (Cooper y Rudd): "Hay más de un rostro", 2 recuadros y botón deshabilitado.
+  - Un rostro lejano: "Acércate un poco a la cámara." y botón deshabilitado.
+  - Imagen sin personas: "No se detecta un rostro" y botón deshabilitado.
+  - Foto grupal con caras de unos 30 px: no detecta ninguna (BlazeFace short range es para rostros cercanos) y bloquea la captura.
+  - La consola solo mostró el aviso informativo de TensorFlow Lite (delegado XNNPACK) y el 404 del `favicon.ico` de la página de prueba.
+  - **No verificado:** con la cámara real del usuario.
 - **Alcance de reportes (30 de octubre):** backend (`tsc`, `npm run lint` y `npm run build`) y frontend (`npm run lint` y `npm run build`) sin errores. Con Gemini real, sin HTTP (no escribe en la base):
   - Indicaciones "Concéntrate solo en el Gestor Uno" sin alcance fijo: el LLM llamó a `listar_gestores` y a las herramientas con el id de gestor1; `alcance.origen = indicaciones`; gráficas con 9 cuentas (antes 16), tabla solo de Gestor Uno y el texto no menciona a Gestor Dos.
   - Alcance fijo gestor2: 7 cuentas y tabla solo de Gestor Dos aunque las indicaciones pidieran Gestor Uno. En esa prueba el texto aún llamaba "Gestor Uno" a los datos de gestor2: ahora el LLM recibe el nombre del gestor fijado y la orden de ignorar a otros gestores. Repetida la prueba: el texto habla de "Gestor Dos (demo)" y no menciona a Gestor Uno.
@@ -292,6 +300,13 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - **LLM vía MCP:** el servidor MCP está dentro del backend (transporte en memoria), no es un proceso aparte. Gemini decide qué herramientas llamar; el backend registra cuáles usó (`herramientasConsultadas`).
 - **Índice de morosidad** (27 de octubre): cuentas atrasadas entre cuentas vigentes (sin liquidar), igual que "Al corriente". Antes dividía entre todas las cuentas. Cambiado en `panel.service.ts` y en `docs/openapi.yaml`.
 - **Seed:** `--reset` es opt-in y nunca toca `perfiles_usuario` ni `neon_auth`.
+
+### Detección de rostros en el navegador (30 de octubre)
+Lo pedía `docs/definicion_proyecto.md` (componente de IA del frontend) y faltaba: antes solo detectaba el microservicio.
+- `@mediapipe/tasks-vision` 1.2.0, MediaPipe Face Detector con **BlazeFace short range**. El modelo oficial (`blaze_face_short_range.tflite`, 230 KB, Apache 2.0) está en `FrontEnd/public/models/` para no depender de un CDN; el WASM (14 MB) lo empaqueta Vite con `?url` y solo se descarga en las pantallas con cámara.
+- `src/lib/detectorRostro.js`: un detector por sesión (`runningMode: VIDEO`, confianza 0.6). Estados: `sin_rostro`, `varios`, `lejos` (rostro de menos de 110 px de ancho, con margen sobre los 80 px que exige el microservicio) y `listo`.
+- `components/Camara.jsx`: evalúa unas 10 veces por segundo, dibuja el recuadro de cada rostro (en espejo, como el video; verde cuando es válido) y muestra la indicación. `onEstado(true)`, y por tanto el botón de captura, solo con un rostro válido. Si el detector no carga, la captura sigue habilitada y valida el microservicio. Sirve a `/registro-facial`, `/verifica-rostro` y `/configuracion-facial`.
+- El detector se carga con `import()`: no entra en el bundle principal.
 
 ### Alcance de los reportes (30 de octubre)
 El usuario detectó que, al pedir en las indicaciones "concéntrate en el Gestor Uno", el texto cambiaba pero las gráficas y la tabla seguían siendo de toda la cartera (con Gestor Dos). Causa: `previsualizar()` calculaba `resumen` y `prioridades` con `PanelService` para toda la cartera, independientemente de lo que consultara el LLM, y las herramientas MCP no aceptaban un gestor.
