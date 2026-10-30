@@ -308,6 +308,12 @@ Lo pedía `docs/definicion_proyecto.md` (componente de IA del frontend) y faltab
 - `components/Camara.jsx`: evalúa unas 10 veces por segundo, dibuja el recuadro de cada rostro (en espejo, como el video; verde cuando es válido) y muestra la indicación. `onEstado(true)`, y por tanto el botón de captura, solo con un rostro válido. Si el detector no carga, la captura sigue habilitada y valida el microservicio. Sirve a `/registro-facial`, `/verifica-rostro` y `/configuracion-facial`.
 - El detector se carga con `import()`: no entra en el bundle principal.
 
+### Diagramas para los manuales (30 de octubre)
+En `.archify/<tipo>-<nombre>-<fecha>/`, cada uno como HTML interactivo (archify, con tarjetas explicativas y fuentes citadas del commit `d35dad7`) y PNG exportado desde el visor:
+- Manual técnico: `architecture-sistemas-inteligentes` (cómo se relacionan visión por computadora, LLM vía MCP y la prueba facial), `architecture-componentes-ia`, `sequence-verificacion-facial`, `dataflow-pipeline-facial`, `lifecycle-sesion-facial` y `sequence-reporte-mcp`.
+- Manual de usuario: `workflow-acceso-facial-usuario` y `workflow-reporte-ia-usuario`.
+- Todos pasaron las comprobaciones automáticas de archify (validación, entrega y navegador). Los archivos de trabajo (candidatos JSON y recibos) se borraron; para editar un diagrama hay que regenerar su candidato.
+
 ### Alcance de los reportes (30 de octubre)
 El usuario detectó que, al pedir en las indicaciones "concéntrate en el Gestor Uno", el texto cambiaba pero las gráficas y la tabla seguían siendo de toda la cartera (con Gestor Dos). Causa: `previsualizar()` calculaba `resumen` y `prioridades` con `PanelService` para toda la cartera, independientemente de lo que consultara el LLM, y las herramientas MCP no aceptaban un gestor.
 - Las herramientas MCP aceptan `gestorId` y anotan en una bitácora qué consultó el LLM. `alcanceConsultado()` decide el alcance: el fijado por el administrador o, si no, el único gestor cuyos indicadores (`resumen_cartera`, `cuentas_prioritarias`) consultó el LLM, aunque también haya pedido la cartera completa; si comparó varios gestores, toda la cartera.
