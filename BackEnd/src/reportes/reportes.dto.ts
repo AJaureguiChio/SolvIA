@@ -25,6 +25,12 @@ export class PrevisualizarReporteDto {
   @IsString()
   @MaxLength(500)
   indicaciones?: string;
+
+  // Alcance fijo: solo las cuentas de este gestor. Sin él, toda la cartera
+  // o el gestor en el que se centre el LLM según las indicaciones.
+  @IsOptional()
+  @IsUUID()
+  gestorId?: string;
 }
 
 // Llega como multipart/form-data junto con el PDF (campo `pdf`).

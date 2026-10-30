@@ -13,7 +13,12 @@ import {
 } from '../common/validacion.js';
 import { DatabaseService } from '../database/database.service.js';
 import { PanelService } from '../panel/panel.service.js';
-import { crearServidorSolvia } from './mcp/servidor-solvia.js';
+import {
+  alcanceConsultado,
+  type BitacoraMcp,
+  crearServidorSolvia,
+  vistaDe,
+} from './mcp/servidor-solvia.js';
 import type {
   CrearReporteDto,
   EntregarReporteDto,
@@ -33,7 +38,9 @@ const SECCIONES = [
 const INSTRUCCIONES = `Eres analista financiero de cobranza en SolvIA, un sistema de seguimiento de planes de pago (los datos son ficticios, de demostración).
 Redactas la explicación en lenguaje natural de un reporte ejecutivo para la dirección.
 Reglas:
-- Antes de escribir, consulta las herramientas: resumen_cartera con el periodo indicado, cuentas_prioritarias y cumplimiento_por_gestor.
+- Antes de escribir, consulta las herramientas: resumen_cartera, cuentas_prioritarias y cumplimiento_por_gestor.
+- Si las indicaciones piden centrarse en un gestor, usa listar_gestores para obtener su gestorId y pásalo en resumen_cartera, cuentas_prioritarias y cumplimiento_por_gestor. En ese caso habla solo de ese gestor y de sus cuentas: no menciones ni compares a otros gestores.
+- Las gráficas y la tabla del reporte se arman con el mismo alcance que consultes en resumen_cartera y cuentas_prioritarias.
 - Usa solo cifras que devuelvan las herramientas; no inventes datos ni porcentajes. Si un dato no existe, dilo.
 - Escribe en español de México, en tono profesional y directo, con un máximo de 350 palabras.
 - Estructura obligatoria: exactamente estas cuatro secciones, cada una con su encabezado en una línea propia:
@@ -67,31 +74,69 @@ export class ReportesService {
       config.get<string>('GEMINI_MODEL_RESPALDO') ?? 'gemini-2.5-flash';
   }
 
-  // Borrador para revisión: métricas calculadas en el servidor y texto del
-  // LLM, que las consulta por MCP. No escribe en `reportes`.
+  // Borrador para revisión: texto del LLM, que consulta las métricas por MCP,
+  // y gráficas y tabla calculadas con el mismo alcance que el LLM consultó
+  // (o el que fijó el administrador). No escribe en `reportes`.
   async previsualizar(admin: UsuarioActual, dto: PrevisualizarReporteDto) {
     if (dto.desde > dto.hasta) {
       throw ApiError.entradaInvalida('desde no puede ser posterior a hasta');
     }
-    const [resumen, prioridades] = await Promise.all([
-      this.panel.resumen(admin, { desde: dto.desde, hasta: dto.hasta }),
-      this.panel.prioridades(admin, { limit: 10 }),
+    const gestorFijo = dto.gestorId ?? null;
+    const fijo = gestorFijo ? await this.exigirGestorActivo(gestorFijo) : null;
+    const nombreFijo = fijo ? (fijo.nombre ?? fijo.email) : null;
+
+    const { texto, bitacora, modelo } = await this.redactar(
+      admin,
+      dto,
+      nombreFijo,
+    );
+    const gestorId = alcanceConsultado(bitacora, gestorFijo);
+    const vista = vistaDe(admin, gestorId);
+    const [resumen, prioridades, gestor] = await Promise.all([
+      this.panel.resumen(vista, { desde: dto.desde, hasta: dto.hasta }),
+      this.panel.prioridades(vista, { limit: 10 }),
+      gestorId ? this.exigirGestorActivo(gestorId) : null,
     ]);
-    const { texto, herramientas, modelo } = await this.redactar(admin, dto);
     return {
       periodoDesde: dto.desde,
       periodoHasta: dto.hasta,
       modelo,
-      herramientasConsultadas: herramientas,
+      herramientasConsultadas: [...new Set(bitacora.map((b) => b.herramienta))],
+      alcance: {
+        gestor,
+        origen: gestorFijo ? 'seleccion' : gestorId ? 'indicaciones' : 'cartera',
+      },
       texto,
       resumen,
       prioridades: prioridades.items,
     };
   }
 
+  private async exigirGestorActivo(id: string) {
+    const { rows } = await this.database.query(
+      `SELECT p.id::text AS id, u.name AS nombre, u.email
+         FROM public.perfiles_usuario p
+         JOIN neon_auth."user" u ON u.id = p.id
+        WHERE p.id = $1::uuid AND p.rol = 'gestor' AND p.activo`,
+      [id],
+    );
+    if (!rows[0]) {
+      throw new ApiError(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'INVALID_SCOPE',
+        'El alcance debe ser un gestor activo',
+      );
+    }
+    return rows[0] as { id: string; nombre: string | null; email: string };
+  }
+
   // Gemini responde 503/429 cuando hay mucha demanda: se reintenta una vez
   // y después se usa el modelo de respaldo.
-  private async redactar(admin: UsuarioActual, dto: PrevisualizarReporteDto) {
+  private async redactar(
+    admin: UsuarioActual,
+    dto: PrevisualizarReporteDto,
+    nombreFijo: string | null,
+  ) {
     if (!this.ai) {
       throw new ApiError(
         HttpStatus.SERVICE_UNAVAILABLE,
@@ -104,7 +149,10 @@ export class ReportesService {
     let ultimo: unknown;
     for (const [i, modelo] of intentos.entries()) {
       try {
-        return { ...(await this.redactarCon(ai, modelo, admin, dto)), modelo };
+        return {
+          ...(await this.redactarCon(ai, modelo, admin, dto, nombreFijo)),
+          modelo,
+        };
       } catch (error) {
         ultimo = error;
         const status = (error as { status?: number }).status;
@@ -126,11 +174,21 @@ export class ReportesService {
     modelo: string,
     admin: UsuarioActual,
     dto: PrevisualizarReporteDto,
+    nombreFijo: string | null,
   ) {
     // Servidor y cliente MCP enlazados en memoria, uno por petición.
     const [transporteCliente, transporteServidor] =
       InMemoryTransport.createLinkedPair();
-    const servidor = crearServidorSolvia(admin, this.panel, this.database);
+    const bitacora: BitacoraMcp = [];
+    const gestorFijo = dto.gestorId ?? null;
+    const servidor = crearServidorSolvia({
+      admin,
+      panel: this.panel,
+      database: this.database,
+      periodo: { desde: dto.desde, hasta: dto.hasta },
+      gestorFijo,
+      bitacora,
+    });
     const cliente = new Client({ name: 'solvia-backend', version: '1.0.0' });
     await servidor.connect(transporteServidor);
     await cliente.connect(transporteCliente);
@@ -140,6 +198,9 @@ export class ReportesService {
         model: modelo,
         contents:
           `Redacta la explicación del reporte ejecutivo del periodo ${dto.desde} a ${dto.hasta}.` +
+          (gestorFijo
+            ? `\nEl reporte está limitado al gestor ${nombreFijo} (gestorId ${gestorFijo}): las herramientas solo devuelven sus cuentas. Refiérete a él como ${nombreFijo}. Si las indicaciones mencionan a otro gestor, no lo atiendas ni lo nombres: este reporte es solo de ${nombreFijo}.`
+            : '') +
           (dto.indicaciones?.trim()
             ? `\nIndicaciones del administrador: ${dto.indicaciones.trim()}`
             : ''),
@@ -154,11 +215,7 @@ export class ReportesService {
 
       const texto = respuesta.text?.trim();
       if (!texto) throw new Error(`${modelo} devolvió una respuesta sin texto`);
-      const herramientas = (respuesta.automaticFunctionCallingHistory ?? [])
-        .flatMap((contenido) => contenido.parts ?? [])
-        .map((parte) => parte.functionCall?.name)
-        .filter((nombre): nombre is string => Boolean(nombre));
-      return { texto, herramientas: [...new Set(herramientas)] };
+      return { texto, bitacora };
     } finally {
       await cliente.close();
       await servidor.close();

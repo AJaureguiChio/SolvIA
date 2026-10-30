@@ -771,9 +771,11 @@ paths:
       tags: [Reportes]
       summary: Borrador de reporte ejecutivo con IA (administrador)
       description: |
-        Calcula las métricas del periodo y pide a Gemini el texto explicativo. Gemini consulta las métricas por MCP
-        (servidor MCP de SolvIA en el backend, herramientas `resumen_cartera`, `cuentas_prioritarias` y
-        `cumplimiento_por_gestor`, sin nombres de deudores). No escribe en `reportes`. Tarda unos 20 s.
+        Pide a Gemini el texto explicativo. Gemini consulta las métricas por MCP (servidor MCP de SolvIA en el backend,
+        herramientas `listar_gestores`, `resumen_cartera`, `cuentas_prioritarias` y `cumplimiento_por_gestor`, sin nombres
+        de deudores). Con `gestorId` el reporte queda limitado a ese gestor. Sin él, si las indicaciones piden centrarse en
+        un gestor, el LLM consulta solo sus indicadores y `resumen` y `prioridades` se calculan con ese mismo alcance
+        (`alcance.origen = indicaciones`). No escribe en `reportes`. Tarda unos 20 s.
         Ante 503/429 de Gemini reintenta y usa el modelo de respaldo (`GEMINI_MODEL_RESPALDO`).
       operationId: previsualizarReporte
       requestBody:
@@ -787,6 +789,7 @@ paths:
                 desde: { $ref: '#/components/schemas/Fecha' }
                 hasta: { $ref: '#/components/schemas/Fecha' }
                 indicaciones: { type: string, maxLength: 500, description: Enfoque o tono para el LLM }
+                gestorId: { type: string, format: uuid, description: Limita el reporte a las cuentas de este gestor activo }
       responses:
         '201':
           description: Borrador para revisión
@@ -799,12 +802,22 @@ paths:
                   periodoHasta: { $ref: '#/components/schemas/Fecha' }
                   modelo: { type: string, example: gemini-3.5-flash }
                   herramientasConsultadas: { type: array, items: { type: string } }
+                  alcance:
+                    type: object
+                    properties:
+                      gestor: { $ref: '#/components/schemas/UsuarioRef' }
+                      origen: { type: string, enum: [seleccion, indicaciones, cartera] }
                   texto: { type: string, description: 'Secciones Resumen ejecutivo, Tendencias, Riesgos y Recomendaciones, cada una con encabezado "## "' }
                   resumen: { type: object, description: Misma forma que GET /panel/resumen }
                   prioridades: { type: array, items: { type: object }, description: Misma forma que GET /panel/prioridades }
         '400': { $ref: '#/components/responses/EntradaInvalida' }
         '401': { $ref: '#/components/responses/NoAutenticado' }
         '403': { $ref: '#/components/responses/Prohibido' }
+        '422':
+          description: '`gestorId` no es un gestor activo (`INVALID_SCOPE`)'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '503':
           description: Falta `GEMINI_API_KEY` o Gemini no respondió (`LLM_UNAVAILABLE`)
           content:

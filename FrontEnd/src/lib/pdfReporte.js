@@ -23,7 +23,7 @@ export function seccionesDeTexto(texto) {
   return secciones;
 }
 
-export async function generarPdfReporte({ titulo, periodoDesde, periodoHasta, texto, resumen, prioridades, graficas }) {
+export async function generarPdfReporte({ titulo, periodoDesde, periodoHasta, alcance, texto, resumen, prioridades, graficas }) {
   const [{ jsPDF }, { autoTable }, { default: html2canvas }] = await Promise.all([
     import('jspdf'),
     import('jspdf-autotable'),
@@ -54,6 +54,8 @@ export async function generarPdfReporte({ titulo, periodoDesde, periodoHasta, te
   }
   doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(...TENUE);
   doc.text(`Periodo: ${fecha(periodoDesde)} – ${fecha(periodoHasta)}   ·   Generado: ${fechaHora(new Date().toISOString())}`, MARGEN, y);
+  y += 5;
+  doc.text(`Alcance: ${alcance}`, MARGEN, y);
   y += 4;
   doc.setDrawColor(...ACENTO).setLineWidth(0.4).line(MARGEN, y, ancho - MARGEN, y);
   y += 8;

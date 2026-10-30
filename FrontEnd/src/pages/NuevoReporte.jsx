@@ -21,6 +21,10 @@ function periodoInicial() {
   return { desde: inicio.toISOString().slice(0, 10), hasta };
 }
 
+function textoAlcance(alcance) {
+  return alcance?.gestor ? `Cuentas de ${nombreUsuario(alcance.gestor)}` : 'Toda la cartera';
+}
+
 export default function NuevoReporte() {
   const navigate = useNavigate();
   const inicial = periodoInicial();
@@ -29,6 +33,7 @@ export default function NuevoReporte() {
     desde: inicial.desde,
     hasta: inicial.hasta,
     indicaciones: '',
+    gestorId: '',
   });
   const [destinatarios, setDestinatarios] = useState(null);
   const [entregar, setEntregar] = useState(true);
@@ -42,8 +47,9 @@ export default function NuevoReporte() {
 
   const gestores = useCarga(() => api('/usuarios', { params: { rol: 'gestor', activo: true } }), []);
   const listaGestores = gestores.datos?.items ?? [];
-  // Mientras el administrador no toque la lista, van todos los gestores activos.
-  const elegidos = destinatarios ?? listaGestores.map((g) => g.id);
+  // Mientras el administrador no toque la lista, van todos los gestores
+  // activos, o solo el del alcance si el reporte es de un gestor.
+  const elegidos = destinatarios ?? (config.gestorId ? [config.gestorId] : listaGestores.map((g) => g.id));
   const paso = borrador ? 2 : 1;
   const ocupado = estado !== null;
 
@@ -60,7 +66,12 @@ export default function NuevoReporte() {
     try {
       const datos = await api('/reportes/previsualizaciones', {
         method: 'POST',
-        body: { desde: config.desde, hasta: config.hasta, indicaciones: config.indicaciones.trim() || undefined },
+        body: {
+          desde: config.desde,
+          hasta: config.hasta,
+          indicaciones: config.indicaciones.trim() || undefined,
+          gestorId: config.gestorId || undefined,
+        },
       });
       setBorrador(datos);
       setTexto(datos.texto);
@@ -80,6 +91,7 @@ export default function NuevoReporte() {
         titulo: config.titulo.trim(),
         periodoDesde: borrador.periodoDesde,
         periodoHasta: borrador.periodoHasta,
+        alcance: textoAlcance(borrador.alcance),
         texto,
         resumen: borrador.resumen,
         prioridades: borrador.prioridades,
@@ -149,12 +161,23 @@ export default function NuevoReporte() {
               </label>
             </div>
             <label className="field">
+              Alcance
+              <select className="input" value={config.gestorId} onChange={cambiar('gestorId')}>
+                <option value="">Toda la cartera (o el gestor que pidan las indicaciones)</option>
+                {listaGestores.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    Solo {nombreUsuario(g)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
               Indicaciones para la IA (opcional)
               <textarea
                 className="input"
                 rows={2}
                 maxLength={500}
-                placeholder="Por ejemplo: enfatiza las cuentas con más de 60 días de mora."
+                placeholder="Por ejemplo: concéntrate en el Gestor Uno o enfatiza las cuentas con más de 60 días de mora."
                 value={config.indicaciones}
                 onChange={cambiar('indicaciones')}
               />
@@ -198,6 +221,11 @@ export default function NuevoReporte() {
                 {fecha(borrador.periodoDesde)} – {fecha(borrador.periodoHasta)} · Modelo {borrador.modelo} · Herramientas MCP consultadas:{' '}
                 {borrador.herramientasConsultadas.length ? borrador.herramientasConsultadas.join(', ') : 'ninguna'}
               </p>
+              <div className="notice">
+                Alcance: <strong>{textoAlcance(borrador.alcance)}</strong>
+                {borrador.alcance.origen === 'indicaciones' && ' (lo eligió la IA según tus indicaciones)'}. Las gráficas y la tabla del
+                PDF usan este mismo alcance.
+              </div>
               <p>
                 Saldo total <strong>{importe(borrador.resumen.totales.saldoTotal)}</strong> · Vencido{' '}
                 <strong>{importe(borrador.resumen.totales.montoVencido)}</strong> · Morosidad{' '}

@@ -107,7 +107,7 @@ Política decidida por el usuario: **obligatoria para todos**. Tras Neon Auth, q
 
 ### Bloque F — Reportes ejecutivos con IA (29 de octubre)
 Decisiones del usuario: el LLM es **Gemini** (`GEMINI_API_KEY` en el `.env`) y la conexión es **MCP real con herramientas**.
-- **Servidor MCP** `BackEnd/src/reportes/mcp/servidor-solvia.ts` (`@modelcontextprotocol/sdk`): herramientas de solo lectura `resumen_cartera` (desde, hasta), `cuentas_prioritarias` (límite) y `cumplimiento_por_gestor`. No entrega nombres de deudores, solo referencias de cuenta. Vive en el proceso del backend y se conecta por `InMemoryTransport`, un servidor y un cliente por petición.
+- **Servidor MCP** `BackEnd/src/reportes/mcp/servidor-solvia.ts` (`@modelcontextprotocol/sdk`): herramientas de solo lectura `listar_gestores`, `resumen_cartera` (periodo del reporte), `cuentas_prioritarias` (límite) y `cumplimiento_por_gestor`; las tres últimas aceptan `gestorId` (desde el 30 de octubre). No entrega nombres de deudores, solo referencias de cuenta. Vive en el proceso del backend y se conecta por `InMemoryTransport`, un servidor y un cliente por petición.
 - **`reportes.service.ts`:**
   - `POST /reportes/previsualizaciones`: calcula el resumen y las prioridades con `PanelService` y pide el texto a Gemini con `mcpToTool(cliente)` (`@google/genai`, llamada automática a herramientas, máx. 8). Instrucciones: cuatro secciones fijas (`## Resumen ejecutivo`, `## Tendencias`, `## Riesgos`, `## Recomendaciones`), solo cifras de las herramientas y 350 palabras como máximo. No escribe en `reportes`.
   - Modelo `GEMINI_MODEL` (por defecto `gemini-3.5-flash`). Ante 503 o 429 reintenta una vez y luego usa `GEMINI_MODEL_RESPALDO` (por defecto `gemini-2.5-flash`). Si todo falla: 503 `LLM_UNAVAILABLE`.
@@ -270,6 +270,11 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
   - PDF generado en Chrome headless con métricas reales: 2 páginas y 103 KB. Primero faltaban barras y líneas (html2canvas no resuelve los `clip-path` de Recharts; ahora se quitan en la copia capturada) y pesaba 4.6 MB en PNG (ahora es JPEG).
   - SQL de alta y entrega con los triggers reales, dentro de una transacción **revertida**: alta del reporte con el PDF de 105,533 bytes, destinatario gestor (1 fila), un administrador como destinatario es rechazado, entrega confirmada (1) y repetida rechazada, DELETE rechazado (inmutable) y el PDF leído de vuelta empieza con `%PDF-`. Después, la lista sigue vacía (0 reportes).
   - **No verificado:** el recorrido completo en el navegador con sesión (redactar, guardar, entregar y descargar como gestor) ni Redocly sobre el YAML.
+- **Alcance de reportes (30 de octubre):** backend (`tsc`, `npm run lint` y `npm run build`) y frontend (`npm run lint` y `npm run build`) sin errores. Con Gemini real, sin HTTP (no escribe en la base):
+  - Indicaciones "Concéntrate solo en el Gestor Uno" sin alcance fijo: el LLM llamó a `listar_gestores` y a las herramientas con el id de gestor1; `alcance.origen = indicaciones`; gráficas con 9 cuentas (antes 16), tabla solo de Gestor Uno y el texto no menciona a Gestor Dos.
+  - Alcance fijo gestor2: 7 cuentas y tabla solo de Gestor Dos aunque las indicaciones pidieran Gestor Uno. En esa prueba el texto aún llamaba "Gestor Uno" a los datos de gestor2: ahora el LLM recibe el nombre del gestor fijado y la orden de ignorar a otros gestores. Repetida la prueba: el texto habla de "Gestor Dos (demo)" y no menciona a Gestor Uno.
+  - Sin indicaciones: toda la cartera (16 cuentas, ambos gestores en la tabla).
+  - `alcanceConsultado()` con bitácoras simuladas: sin consultas → cartera; cartera + gestor1 → gestor1; gestor1 y gestor2 → cartera; fijo gestor2 → gestor2; solo `cumplimiento_por_gestor` → cartera.
 - **No verificado:** tests unitarios (por decisión, el bloque B se hizo sin tests).
 
 ## Decisiones y desvíos
@@ -288,7 +293,15 @@ venv\Scripts\python -m uvicorn main:app --host 127.0.0.1 --port 8000
 - **Índice de morosidad** (27 de octubre): cuentas atrasadas entre cuentas vigentes (sin liquidar), igual que "Al corriente". Antes dividía entre todas las cuentas. Cambiado en `panel.service.ts` y en `docs/openapi.yaml`.
 - **Seed:** `--reset` es opt-in y nunca toca `perfiles_usuario` ni `neon_auth`.
 
+### Alcance de los reportes (30 de octubre)
+El usuario detectó que, al pedir en las indicaciones "concéntrate en el Gestor Uno", el texto cambiaba pero las gráficas y la tabla seguían siendo de toda la cartera (con Gestor Dos). Causa: `previsualizar()` calculaba `resumen` y `prioridades` con `PanelService` para toda la cartera, independientemente de lo que consultara el LLM, y las herramientas MCP no aceptaban un gestor.
+- Las herramientas MCP aceptan `gestorId` y anotan en una bitácora qué consultó el LLM. `alcanceConsultado()` decide el alcance: el fijado por el administrador o, si no, el único gestor cuyos indicadores (`resumen_cartera`, `cuentas_prioritarias`) consultó el LLM, aunque también haya pedido la cartera completa; si comparó varios gestores, toda la cartera.
+- `resumen` y `prioridades` se calculan **después** de redactar, con ese alcance (`vistaDe()` usa la misma vista que el panel de ese gestor). La respuesta incluye `alcance: { gestor, origen: seleccion | indicaciones | cartera }`.
+- `gestorId` opcional en `POST /reportes/previsualizaciones` (selector "Alcance" de la pantalla 15, como en el wireframe): las herramientas ignoran cualquier otro gestor y el LLM recibe el nombre del gestor. Un gestor inexistente o inactivo da 422 `INVALID_SCOPE`.
+- Pantalla 15: muestra el alcance y su origen en la vista previa; con alcance de un gestor, los destinatarios se preseleccionan con ese gestor. El PDF lleva una línea "Alcance" en el encabezado.
+
 ## Problemas conocidos
+- **Cuota de Gemini:** el 30 de octubre a medianoche `gemini-3.5-flash` respondió 429 (límite de peticiones) tras varias pruebas seguidas; el reintento pasó a `gemini-2.5-flash`, que sí respondió. Evitar ráfagas de pruebas antes de la demo.
 - **Gemini saturado:** el 29 de octubre por la noche Google respondió 503 "high demand" a `gemini-3.5-flash` y a `gemini-2.5-flash`. La pantalla 15 muestra "El modelo de lenguaje no respondió"; hay que esperar unos minutos o cambiar `GEMINI_MODEL` / `GEMINI_MODEL_RESPALDO` en el `.env` (la clave da acceso, entre otros, a `gemini-flash-latest`, `gemini-3.8-flash` y `gemini-2.5-pro`).
 - **Reportes permanentes:** un trigger impide UPDATE y DELETE en `reportes`; cada prueba que guarde un PDF deja un registro definitivo en `desarrollo` (solo `npm run db:seed -- --reset` vacía las tablas de negocio). Para probar el SQL sin dejar rastro, usar una transacción revertida (así se hizo el 29 de octubre).
 - **Avisos de npm:** `npm install` avisa que bloqueó los scripts de `core-js` y `protobufjs` (allowScripts); no afectan el funcionamiento.

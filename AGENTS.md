@@ -22,7 +22,8 @@
 
 ## Reportes e IA (bloque F)
 
-- El texto de los reportes lo redacta Gemini (`GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_MODEL_RESPALDO`) consultando las métricas por MCP: el servidor MCP está en `BackEnd/src/reportes/mcp/servidor-solvia.ts`. Una métrica nueva para el LLM se agrega ahí como herramienta de solo lectura, sin datos personales de deudores.
+- El texto de los reportes lo redacta Gemini (`GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_MODEL_RESPALDO`) consultando las métricas por MCP: el servidor MCP está en `BackEnd/src/reportes/mcp/servidor-solvia.ts` y lo usa `reportes.service.ts`. Una métrica nueva para el LLM se agrega ahí como herramienta de solo lectura, sin datos personales de deudores.
+- Las gráficas y la tabla del reporte deben tener el mismo alcance que el texto: toda herramienta MCP nueva que filtre datos debe anotarse en la bitácora y respetar `gestorFijo` (ver `alcanceConsultado()`).
 - El PDF se arma en el navegador (`FrontEnd/src/lib/pdfReporte.js`, jsPDF) y el backend lo valida y lo guarda en `reportes.archivo_pdf`.
 
 ## Convenciones del backend (`BackEnd/`)
